@@ -1,0 +1,1 @@
+{"ds": "mnist", "mode": "stream", "r0": 2, "T": 32, "model_seed": 1, "ns": 1, "acc": 0.978, "git": "093fb2b"}

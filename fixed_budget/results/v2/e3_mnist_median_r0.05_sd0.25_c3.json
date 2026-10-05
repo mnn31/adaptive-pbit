@@ -1,0 +1,1 @@
+{"ds": "mnist", "centering": "median", "r0": 0.05, "sigma_delta": 0.25, "chip": 3, "T": 32, "acc": 0.7173, "git": "ef56158"}

@@ -1,0 +1,25 @@
+[project]
+name = "smtjnn"
+version = "0.1.0"
+description = "Stochastic binary neural network inference under physically realistic sMTJ randomness"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "matplotlib>=3.8",
+    "numba>=0.59",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

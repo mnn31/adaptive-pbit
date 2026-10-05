@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+.DS_Store
+.env
+data/
+# checkpoints are tracked deliberately (paper-1 reproducibility policy)
+
+# submission artifacts (regenerable; large)
+paper/adaptive_pbit_access_source.zip

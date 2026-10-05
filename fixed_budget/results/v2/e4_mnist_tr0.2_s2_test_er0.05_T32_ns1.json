@@ -1,0 +1,1 @@
+{"ds": "mnist", "train_r0": 0.2, "model_seed": 2, "split": "test", "eval_r0": 0.05, "T": 32, "ns": 1, "acc": 0.9271, "git": "ef56158"}

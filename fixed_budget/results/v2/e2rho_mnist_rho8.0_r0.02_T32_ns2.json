@@ -1,0 +1,1 @@
+{"ds": "mnist", "mode": "settle", "rho": 8.0, "r0": 0.02, "T": 32, "ns": 2, "acc": 0.972, "git": "ef56158"}
