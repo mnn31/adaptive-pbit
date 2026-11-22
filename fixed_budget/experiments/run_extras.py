@@ -7,8 +7,7 @@ H. Correlation-aware models evaluated at rule-compliant r0=4 (true nominal).
 
 from pathlib import Path
 
-from run_v2 import (OUT, data, done, save, eval_stream, eval_settle,
-                    lane_params)
+from run_v2 import OUT, data, done, eval_settle, eval_stream, save
 from smtjnn.infer import evaluate_lanes
 from smtjnn.smtj import TelegraphSource
 from smtjnn.train import load_checkpoint
