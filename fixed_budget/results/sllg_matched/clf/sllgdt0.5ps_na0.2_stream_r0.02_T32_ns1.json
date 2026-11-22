@@ -1,0 +1,26 @@
+{
+ "source": "sllg",
+ "net": "na0.2",
+ "checkpoint": "results/v2_mnist_na0.2_seed0.pt",
+ "mode": "stream",
+ "r0": 0.02,
+ "T": 32,
+ "settle": 4.0,
+ "ns": 1,
+ "acc": 0.4366,
+ "n_images": 10000,
+ "lanes": 500,
+ "warmup_per_lane": 10,
+ "rate_cap": null,
+ "rate_law": null,
+ "dt_s": 5e-13,
+ "device_dir": "results/sllg_matched",
+ "tau_c0_s": 1.406419956912363e-08,
+ "tesla_per_unit_i": 0.01793821014015314,
+ "seconds": 3.1,
+ "code_sha256": {
+  "sllg.py": "e72207f22ebe7a61",
+  "sllg_classifier.py": "87e2d39859ceb0b7"
+ },
+ "time": "2026-11-21 23:16:56"
+}

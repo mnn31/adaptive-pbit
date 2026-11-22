@@ -1,0 +1,22 @@
+{
+ "source": "equilibrium",
+ "net": "na0.2",
+ "mode": "iid",
+ "r0": 0,
+ "T": 32,
+ "ns": 0,
+ "acc": 0.9473,
+ "n_images": 10000,
+ "lanes": 500,
+ "warmup_per_lane": 0,
+ "settle": 4.0,
+ "dt_s": null,
+ "tau_c0_s": null,
+ "tesla_per_unit_i": 0.017823955542036692,
+ "seconds": 45.8,
+ "code_sha256": {
+  "sllg.py": "b72dd0651d0c6370",
+  "sllg_classifier.py": "bdac8e5de00a6c65"
+ },
+ "time": "2026-11-21 03:09:38"
+}

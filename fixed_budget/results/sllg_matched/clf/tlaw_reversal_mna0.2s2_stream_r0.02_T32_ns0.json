@@ -1,0 +1,59 @@
+{
+ "source": "tlaw_reversal",
+ "net": "mna0.2s2",
+ "checkpoint": "results/sllg_matched/nets/sllg_na0.2_seed2.pt",
+ "mode": "stream",
+ "r0": 0.02,
+ "T": 32,
+ "settle": 4.0,
+ "ns": 0,
+ "acc": 0.5818,
+ "n_images": 10000,
+ "lanes": 500,
+ "warmup_per_lane": 10,
+ "rate_cap": null,
+ "rate_law": {
+  "i": [
+   0.0,
+   1.0023969819893088,
+   2.0047939639786176,
+   4.009587927957235,
+   6.0143818919358525,
+   8.01917585591447
+  ],
+  "i_nominal": [
+   0,
+   1,
+   2,
+   4,
+   6,
+   8
+  ],
+  "growth": [
+   1.0,
+   1.3363528236356899,
+   2.4011214685715188,
+   5.712594984985218,
+   9.536113791907614,
+   13.384432177329357
+  ],
+  "cosh_i": [
+   1.0,
+   1.5459020065121818,
+   3.7796260274767786,
+   27.571145815159788,
+   204.63761463319392,
+   1519.336163121606
+  ]
+ },
+ "dt_s": null,
+ "device_dir": "results/sllg_matched",
+ "tau_c0_s": null,
+ "tesla_per_unit_i": null,
+ "seconds": 49.8,
+ "code_sha256": {
+  "sllg.py": "e72207f22ebe7a61",
+  "sllg_classifier.py": "87e2d39859ceb0b7"
+ },
+ "time": "2026-11-21 22:54:31"
+}

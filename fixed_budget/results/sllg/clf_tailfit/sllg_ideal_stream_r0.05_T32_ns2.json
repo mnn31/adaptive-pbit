@@ -1,0 +1,22 @@
+{
+ "source": "sllg",
+ "net": "ideal",
+ "mode": "stream",
+ "r0": 0.05,
+ "T": 32,
+ "ns": 2,
+ "acc": 0.5301,
+ "n_images": 10000,
+ "lanes": 500,
+ "warmup_per_lane": 10,
+ "settle": 4.0,
+ "dt_s": 1e-12,
+ "tau_c0_s": 1.185318140834721e-08,
+ "tesla_per_unit_i": 0.017823955542036692,
+ "seconds": 11.8,
+ "code_sha256": {
+  "sllg.py": "b72dd0651d0c6370",
+  "sllg_classifier.py": "bdac8e5de00a6c65"
+ },
+ "time": "2026-11-21 03:09:27"
+}

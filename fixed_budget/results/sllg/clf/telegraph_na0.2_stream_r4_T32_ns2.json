@@ -1,0 +1,25 @@
+{
+ "source": "telegraph",
+ "net": "na0.2",
+ "checkpoint": "results/v2_mnist_na0.2_seed0.pt",
+ "mode": "stream",
+ "r0": 4,
+ "T": 32,
+ "settle": 4.0,
+ "ns": 2,
+ "acc": 0.9465,
+ "n_images": 10000,
+ "lanes": 500,
+ "warmup_per_lane": 10,
+ "rate_cap": null,
+ "dt_s": null,
+ "device_dir": null,
+ "tau_c0_s": null,
+ "tesla_per_unit_i": null,
+ "seconds": 52.2,
+ "code_sha256": {
+  "sllg.py": "e72207f22ebe7a61",
+  "sllg_classifier.py": "bc51d2c6dfb95325"
+ },
+ "time": "2026-11-21 13:38:08"
+}
