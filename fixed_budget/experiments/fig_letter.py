@@ -45,7 +45,7 @@ plt.rcParams.update({
     "axes.linewidth": 0.6, "lines.linewidth": 1.2,
     "pdf.fonttype": 42, "figure.dpi": 300,
 })
-R0LAB = r"Sampling ratio, $r_0=\Delta t/\tau_{\mathrm{corr}}(0)$"
+R0LAB = r"Read-interval ratio, $r_0=\Delta t/\tau_{\mathrm{corr}}(0)$"
 
 
 # all results/v2 records of one experiment prefix whose fields match the filters
@@ -241,7 +241,7 @@ def fig3():
     ax.plot([], [], color="0.3", ls=":", lw=0.9, marker="o", ms=4.5,
             mfc="white", mec="0.3", mew=0.8, label="on macrospin neurons")
     ax.set_xticks(x, [str(e) for e in ers])
-    ax.set_xlabel(r"Evaluation sampling ratio, $r_0$ (streaming, $N=32$)")
+    ax.set_xlabel(r"Read-interval ratio, $r_0$ (streaming, $N=32$)")
     ax.set_ylabel("Test accuracy (%)")
     order = ["ideal (independent)", "telegraph, 0.5", "telegraph, 0.2",
              "telegraph, 0.1", "macrospin, 0.2", "on macrospin neurons"]

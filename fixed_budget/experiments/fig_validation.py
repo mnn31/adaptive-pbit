@@ -390,7 +390,7 @@ def draw(pdf, name="validation"):
                   capsize=1.5, elinewidth=0.7, zorder=3, label="mumax3")
     ax_c.axvline(4, color="0.5", ls="--", lw=0.7)
     ax_c.set(xscale="log", yscale="log", xlim=(0.015, 5), ylim=(6e-3, 0.7),
-             xlabel=r"Sampling ratio, $r_0=\Delta t/\tau_{\mathrm{corr}}(0)$",
+             xlabel=r"Read-interval ratio, $r_0=\Delta t/\tau_{\mathrm{corr}}(0)$",
              ylabel="P(change)")
     ax_c.text(3.7, 8e-3, r"$2\tau$ rule", ha="right", va="bottom", fontsize=7, rotation=90)
     ax_c.legend(frameon=False, loc="upper left", handlelength=1.6, labelspacing=0.2,
