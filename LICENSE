@@ -22,5 +22,4 @@ SOFTWARE.
 
 NOTE ON PROVENANCE. src/apbit/{smtj,model,data,train,infer}.py are ported from
 the author's earlier project (paper 1, smtj-sbnn) and are covered by this same
-license. The IEEE Access LaTeX template under paper/ is IEEE's and is NOT
-covered by this license; it is included only to build the manuscript locally.
+license.

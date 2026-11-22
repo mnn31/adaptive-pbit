@@ -206,7 +206,7 @@ TRUNC_LEGEND = (0.0, 0.5, 1.0)
 # ---------------------------------------------------------------------------
 # PRINT GEOMETRY (convergence review 2 item 2 — the binding constraint)
 # ---------------------------------------------------------------------------
-# ieeeaccess.cls reports \columnwidth = 242.674 pt and \textwidth = 505.122 pt
+# the publisher's two-column class reports \columnwidth = 242.674 pt and \textwidth = 505.122 pt
 # in TeX points (1 in = 72.27 pt), i.e. 3.358 in and 6.988 in. Every figure is
 # DRAWN AT THE WIDTH IT IS PRINTED AT and included with `width=\columnwidth` or
 # `width=\textwidth`, so \includegraphics applies a scale of ~1 and a native

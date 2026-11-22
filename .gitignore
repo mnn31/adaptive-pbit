@@ -7,6 +7,3 @@ __pycache__/
 .env
 data/
 # checkpoints are tracked deliberately (paper-1 reproducibility policy)
-
-# submission artifacts (regenerable; large)
-paper/adaptive_pbit_access_source.zip
