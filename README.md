@@ -122,15 +122,11 @@ MIT (`LICENSE`).
 
 ## AI disclosure
 
-Simulation code, experiment orchestration, and manuscript drafting were done
-with substantial assistance from AI tools (Anthropic Claude), under the
-author's direction and review; see the manuscript's AI-use statement.
+Claude (Anthropic) was used, under the author's direction, to assist with repetitive and boilerplate portions of the code (including the scripts that generate the figures and tables), debugging, and drafting and revising manuscript text in all sections, from the Abstract to the Conclusion. The author formulated the research questions, designed the study, selected the methods and specific implementation approaches, and directed the organization of the code and files in the GitHub repository. The author retained control over all scientific and implementation decisions, reviewed and validated the code and results, and determined the interpretation and conclusions. The author reviewed and approved the final manuscript and takes full responsibility for the research questions, methodology, code, analyses, findings, and all content of this work.
 
 ## Provenance
 
 Every result cell in `results/grid2/` records the content hash of the
 exact simulator and driver code that produced it; `--verify` in
 `experiments/run_grid.py` recomputes any cell into a scratch directory and
-diffs. The full development history (including the pre-registration
-timestamps referenced in the paper) is retained privately and is available
-to editors and reviewers on request.
+diffs.

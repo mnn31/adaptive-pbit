@@ -79,9 +79,10 @@ next 40 ns and the rest, and shows no drift.
     python analyze_checks.py RUNS_STEPJ RUNS_MCAL RUNS_MESH ../results/micromagnetics
 
 `analyze.py` sorts the runs by set and time step from their parameter files,
-so the order of the directories does not matter. The paths of the mumax3
-binary and kernel cache are set at the top of `run_queue.py` (or with the
-environment variables `MUMAX3_DIR` and `MUMAX3_CACHE`). The 50 fs study
+so the order of the directories does not matter. `run_queue.py` finds the
+mumax3 binary and its `lib/` in `MUMAX3_DIR` (default `./mumax3`), the kernel
+cache in `MUMAX3_CACHE` (default `$MUMAX3_DIR/cache`) and the MPS pipe in
+`CUDA_MPS_PIPE_DIRECTORY` (default `/tmp/nvidia-mps`). The 50 fs study
 is about 35 000 ns of 64-disk simulation in 50 fs-equivalent steps (about 14
 GPU-hours on one RTX 4090 with MPS); the 25 fs rerun and the added runs are
 about 46 000 more, run on two GPUs. Packed trajectories are not in the
@@ -163,7 +164,8 @@ repository; the reduced records are.
   strongly driven steps the response is not a single exponential and the free
   fit overshoots abs(s_inf) = 1; use the fixed asymptotes there.
 - **Large bias.** `few_flips` marks points with fewer than 30 flips. There the
-  read is single-state and its 1/e time measures in-well motion, not switching.
+  read is nearly single-state and its 1/e time is set by brief excursions
+  across m_z = 0, not by switching between the wells.
   Where a seed never visits the minority state (108 mT) the logit is unbounded
   and I is not measured. `I_model` is then the field-fit line
   (`I_model_source`), which is an extrapolation from abs(I) <= 2.1 to about 6
