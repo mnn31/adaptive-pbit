@@ -122,7 +122,7 @@ MIT (`LICENSE`).
 
 ## AI disclosure
 
-Claude (Anthropic) was used, under the author's direction, to assist with repetitive and boilerplate portions of the code (including the scripts that generate the figures and tables), debugging, and drafting and revising manuscript text in all sections, from the Abstract to the Conclusion. The author formulated the research questions, designed the study, selected the methods and specific implementation approaches, and directed the organization of the code and files in the GitHub repository. The author retained control over all scientific and implementation decisions, reviewed and validated the code and results, and determined the interpretation and conclusions. The author reviewed and approved the final manuscript and takes full responsibility for the research questions, methodology, code, analyses, findings, and all content of this work.
+Claude (Anthropic) was used, under the author's direction, to assist with repetitive and boilerplate portions of the code, debugging, and drafting and revising manuscript text. The author formulated the research questions, designed the study, selected the methods and specific implementation approaches, and directed the organization of the code and files in the GitHub repository. The author retained control over all scientific and implementation decisions, reviewed and validated the code and results, and determined the interpretation and conclusions. The author reviewed and approved the final manuscript and takes full responsibility for the research questions, methodology, code, analyses, findings, and all content of this work.
 
 ## Provenance
 
