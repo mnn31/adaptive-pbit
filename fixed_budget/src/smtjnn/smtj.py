@@ -17,9 +17,19 @@ NOTE the 2τ rule of Daniels et al. is stated in MEAN DWELL time; at I=0
 τ_dwell = 2 τ_corr, so rule-compliant sampling is r0 ≥ 4 (not 2).
 
 Variant `bias_independent_tau=True` keeps the same stationary law but a
-fixed total rate (k₊₋ + k₋₊ = 2f): the easy-plane-like regime where
-fluctuation rate is not Arrhenius-limited. Then Δt/τ_corr = r0·e^{−δΔ}
-with no cosh(I) factor.
+fixed total rate (k₊₋ + k₋₊ = 2f), so Δt/τ_corr = r0·e^{−δΔ} with no
+cosh(I) factor. It is a rate-model control and represents no particular
+device (an easy-plane magnet has no two states and is not described by
+either variant).
+
+Variant `rate_cap=c` (diagnostic): the total rate follows 2f cosh(I) only
+up to 2f c, so a strongly driven neuron cannot relax faster than c times
+its zero-bias rate. The stationary law is unchanged.
+
+Variant `rate_law=(i_grid, growth)` (diagnostic): the total rate is
+2f g(|I|), with g interpolated (linearly in log g) through tabulated
+points, for example the relaxation rates measured on a simulated device,
+and held at the last value beyond the grid. The stationary law is unchanged.
 
 Device variation: δΔ ~ N(μ, σ_Δ²) per (layer, neuron), fixed per chip.
 centering='median' → μ=0 (median τ preserved; E[τ] grows as e^{σ²/2});
@@ -54,7 +64,8 @@ class TelegraphSource:
     def __init__(self, r0: float, sigma_delta: float = 0.0, chip_seed: int = 0,
                  noise_seed: int = 0, streaming: bool = False,
                  settle_ratio: float = 4.0, centering: str = "median",
-                 bias_independent_tau: bool = False):
+                 bias_independent_tau: bool = False, rate_cap=None,
+                 rate_law=None):
         if not (r0 > 0):
             raise ValueError("r0 must be positive (np.inf = ideal)")
         if centering not in ("median", "mean-tau"):
@@ -66,6 +77,17 @@ class TelegraphSource:
         self.settle_ratio = float(settle_ratio)
         self.centering = centering
         self.bias_independent_tau = bias_independent_tau
+        if rate_cap is not None and not rate_cap >= 1:
+            raise ValueError("rate_cap must be >= 1 (or None)")
+        self.rate_cap = rate_cap
+        if rate_law is not None:
+            grid, growth = (np.asarray(v, dtype=np.float64) for v in rate_law)
+            if (grid.ndim != 1 or grid.shape != growth.shape or grid[0] != 0
+                    or np.any(np.diff(grid) <= 0) or np.any(growth <= 0)):
+                raise ValueError("rate_law needs an increasing |I| grid "
+                                 "starting at 0 and positive growth values")
+            rate_law = (grid, np.log(growth))
+        self.rate_law = rate_law
         self.rng = np.random.default_rng(noise_seed)
         self.state: dict[int, np.ndarray] = {}
         self.rate_factor: dict[int, np.ndarray] = {}
@@ -100,7 +122,14 @@ class TelegraphSource:
         rf = self._rate_factor(n, layer)[None, :]
         if self.bias_independent_tau:
             return np.broadcast_to(ratio * rf, i_pre.shape)
-        return ratio * rf * np.cosh(i_pre)
+        if self.rate_law is not None:
+            grid, log_growth = self.rate_law
+            growth = np.exp(np.interp(np.abs(i_pre), grid, log_growth))
+        else:
+            growth = np.cosh(i_pre)
+        if self.rate_cap is not None:
+            growth = np.minimum(growth, self.rate_cap)
+        return ratio * rf * growth
 
     # -- sampling -----------------------------------------------------------
     def sample(self, i: torch.Tensor, layer: int) -> torch.Tensor:
