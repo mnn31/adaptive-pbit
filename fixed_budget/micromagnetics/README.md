@@ -224,7 +224,17 @@ repository; the reduced records are.
   and, for the cosh-law ratio, I = 4 x I(18 mT) on both meshes; the
   asymptote of the fixed-asymptote fit is then tanh of that I, not an
   equilibrium run. The scan runs are short: where a run ends before the read
-  decorrelates, its correlation time is missing.
+  decorrelates, its correlation time is missing. Result: with 1 nm cells
+  Ku = 6.0e5 J/m^3 gives a barrier of 2.74 kT and Ku = 6.2e5 gives
+  3.67 +- 0.03 kT with tau_c(0) = 13.7 +- 1.3 ns; at 6.2e5 the read-change
+  factor at r0 = 0.02 is 1.99 (2 nm: 2.10) and the step time at +-72 mT is
+  0.157 +- 0.018 and 0.148 +- 0.017 tau_c(0) (2 nm: 0.137 +- 0.007 and
+  0.142 +- 0.011).
+- **Current steps.** At 4.4e10 A/m^2 the measured input is I = 3.69 +- 0.10
+  (20 flips in four seeds). After a reversal of the current the read mean
+  relaxes in 0.126 and 0.133 tau_c(0) (equilibrium asymptote), 2.5 to 2.7
+  times the cosh-law time, or 3.0 times with a fitted asymptote; the field
+  step at I = 3.89 gives 3.3 to 3.9.
 - **Dwell test.** The null is 200 telegraph replicas per seed, reduced
   exactly as the data; `seedmean_D_p_value` is the fraction of replicas whose
   seed-mean D is at least the measured one.

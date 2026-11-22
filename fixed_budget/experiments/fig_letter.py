@@ -105,7 +105,7 @@ def fig2():
     e1 = agg(rows("e1", ds="mnist", model_seed=0), ["T"])
     ct = agg(rows("e2ct", ds="mnist"), ["r0", "T"])
     r0s = sorted({k[1] for k in e2})
-    fig, axes = plt.subplots(2, 1, figsize=(W, 3.6), sharex=True)
+    fig, axes = plt.subplots(2, 1, figsize=(W, 3.7), sharex=True)
     for ax, mode, title, lab in [
             (axes[0], "settle", "Settle mode (settle $4\\,\\tau_{\\mathrm{corr}}(0)$)", "(a)"),
             (axes[1], "stream", "Streaming mode (no settle)", "(b)")]:
@@ -146,7 +146,7 @@ def fig2():
     axes[0].legend(frameon=False, loc="lower center", fontsize=8, ncol=3,
                    handletextpad=0.3, columnspacing=1.0)
     axes[1].legend(frameon=False, fontsize=8, loc="upper center",
-                   bbox_to_anchor=(0.45, -0.30), ncol=2, handletextpad=0.3,
+                   bbox_to_anchor=(0.45, -0.36), ncol=2, handletextpad=0.3,
                    columnspacing=0.8)
     axes[1].set_xlabel(R0LAB)
     fig.tight_layout(h_pad=0.6)
@@ -197,7 +197,7 @@ def fig3():
     base = agg(rows("e2", ds="mnist", mode="stream"), ["r0", "T"])
     ers = [1, 0.5, 0.2, 0.1, 0.05, 0.02]
     x = np.arange(len(ers))
-    fig, axes = plt.subplots(2, 1, figsize=(W, 3.7))
+    fig, axes = plt.subplots(2, 1, figsize=(W, 3.4))
     ax = axes[0]
     # colour: training activations; solid, filled: evaluated on telegraph
     # neurons; dotted, open: evaluated on macrospin neurons
