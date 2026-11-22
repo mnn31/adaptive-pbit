@@ -214,7 +214,7 @@ def fig3():
     # colour: training activations; solid, filled: evaluated on telegraph
     # neurons; dotted, open: evaluated on macrospin neurons
     ax.plot(x, [100 * base[(e, 32)][0] for e in ers], color="k", marker="D",
-            ms=3, label="ideal (independent)")
+            ms=3, label="ideal-trained")
     for tr, col, mk in [(0.5, "#0072B2", "o"), (0.2, "#D55E00", "s"),
                         (0.1, "#009E73", "^")]:
         pts = [(i, *test[(tr, e, 32)][:2]) for i, e in enumerate(ers)
@@ -243,13 +243,13 @@ def fig3():
     ax.set_xticks(x, [str(e) for e in ers])
     ax.set_xlabel(r"Read-interval ratio, $r_0$ (streaming, $N=32$)")
     ax.set_ylabel("Test accuracy (%)")
-    order = ["ideal (independent)", "telegraph, 0.5", "telegraph, 0.2",
+    order = ["ideal-trained", "telegraph, 0.5", "telegraph, 0.2",
              "telegraph, 0.1", "macrospin, 0.2", "on macrospin neurons"]
     handles = dict(zip(*ax.get_legend_handles_labels()[::-1]))
     # the lower left is free of data: every curve is above 90% there
-    ax.legend([handles[k] for k in order], order, frameon=False, fontsize=8,
-              loc="lower left", handletextpad=0.4, labelspacing=0.25,
-              borderaxespad=0.2)
+    ax.legend([handles[k] for k in order], order, frameon=False, fontsize=7,
+              loc="lower left", ncol=2, handletextpad=0.3, labelspacing=0.2,
+              handlelength=1.4, columnspacing=0.6, borderaxespad=0.2)
     ax.set_ylim(0, 102)
     ax.grid(True, lw=0.3, alpha=0.4)
     panel(ax, "(a)")
@@ -266,7 +266,8 @@ def fig3():
                             ("stream", "#0072B2", "o", "ideal-trained, stream")]:
         sub = [q for q in pts if q[2] == m]
         ax.scatter([q[0] for q in sub], [100 * q[1] for q in sub], s=8,
-                   marker=mk, color=col, alpha=0.6, label=lab)
+                   marker=mk, color=col, alpha=0.6, label=lab,
+                   zorder=3 if m == "settle" else 2)
     ax.scatter([q[0] for q in na], [100 * q[1] for q in na], s=10, marker="s",
                color="#D55E00", alpha=0.9, label="correlation-aware")
     # frontier: walking from fast to slow, keep each point that beats every faster one
