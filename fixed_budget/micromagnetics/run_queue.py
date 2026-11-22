@@ -20,11 +20,12 @@ from pathlib import Path
 import numpy as np
 from mmstats import read_table
 
-# Where mumax3, its kernel cache and the MPS pipe live; override with the
-# environment variables on another machine.
-MX = os.environ.get("MUMAX3_DIR", "/workspace/lmag/mumax/mumax3.12_linux_cuda12.9")
-CACHE = os.environ.get("MUMAX3_CACHE", "/workspace/lmag/mumax/cache")
-MPS_PIPE = os.environ.get("CUDA_MPS_PIPE_DIRECTORY", "/workspace/lmag/mps/pipe")
+# Where mumax3 (the binary and its lib/), its kernel cache and the MPS pipe live.
+# The defaults are a mumax3 directory next to where the runner is started and
+# the CUDA MPS default pipe; set the environment variables to change them.
+MX = os.environ.get("MUMAX3_DIR", "mumax3")
+CACHE = os.environ.get("MUMAX3_CACHE", os.path.join(MX, "cache"))
+MPS_PIPE = os.environ.get("CUDA_MPS_PIPE_DIRECTORY", "/tmp/nvidia-mps")
 
 
 # Pack <name>.out/table.txt into <name>.npz (time and float16 per-disk
