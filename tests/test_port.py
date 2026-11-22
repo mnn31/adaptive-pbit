@@ -165,8 +165,8 @@ def test_model_gradients_flow_through_physical_source():
     model.train()
     out = model(torch.randn(3, 10), source=IdealSource(seed=0))
     out.sum().backward()
-    assert all(l.weight.grad is not None and l.weight.grad.abs().sum() > 0
-               for l in model.layers)
+    assert all(layer.weight.grad is not None and layer.weight.grad.abs().sum() > 0
+               for layer in model.layers)
 
 
 def test_ideal_source_marginal():

@@ -32,9 +32,7 @@ FAILS at a 1.5x inflation — and the uncorrected rule on the same streams is
 above 2.5x, which the premise test asserts separately.
 """
 
-RESTORE_SLACK = 1.3
-
-from math import comb, log, sqrt
+from math import comb, sqrt
 
 import numpy as np
 import pytest
@@ -48,6 +46,8 @@ from apbit.stopping import (DirichletStop, EProcessStop, FixedN, MarkovSPRT,
                             WaldSPRT, dirichlet_plurality_prob_beta,
                             dirichlet_plurality_prob_mc, markov_rho_bounds,
                             markov_transition, regularized_incomplete_beta)
+
+RESTORE_SLACK = 1.3
 
 
 # ---------------------------------------------------------------- helpers --

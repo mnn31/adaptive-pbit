@@ -18,7 +18,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 
 from apbit.data import splits
 from apbit.infer import evaluate_ideal

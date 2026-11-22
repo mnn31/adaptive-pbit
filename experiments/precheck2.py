@@ -22,7 +22,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 
 from apbit.data import splits
 from apbit.diagnostics import vote_lag1_acf
