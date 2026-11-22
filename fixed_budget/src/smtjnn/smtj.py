@@ -61,6 +61,9 @@ class TelegraphSource:
         settle erases depends on settle_ratio, honestly.
     """
 
+    # r0 and settle_ratio are intervals in units of the nominal zero-bias tau_corr.
+    # rate_cap (>= 1) caps how fast a driven neuron relaxes and rate_law ((|I| grid,
+    # growth)) replaces the cosh I growth; both are optional and leave P(+1) unchanged.
     def __init__(self, r0: float, sigma_delta: float = 0.0, chip_seed: int = 0,
                  noise_seed: int = 0, streaming: bool = False,
                  settle_ratio: float = 4.0, centering: str = "median",
@@ -86,6 +89,7 @@ class TelegraphSource:
                     or np.any(np.diff(grid) <= 0) or np.any(growth <= 0)):
                 raise ValueError("rate_law needs an increasing |I| grid "
                                  "starting at 0 and positive growth values")
+            # store log growth so the rate is interpolated linearly in log g
             rate_law = (grid, np.log(growth))
         self.rate_law = rate_law
         self.rng = np.random.default_rng(noise_seed)
@@ -117,6 +121,9 @@ class TelegraphSource:
                              f"{rf.shape[0]} -> {n}")
         return rf
 
+    # Interval over correlation time for every neuron at its current input: ratio times
+    # the chip's rate factor times the growth of the total rate with |I| (cosh I by
+    # default, or the tabulated rate_law), cut at rate_cap when one is set.
     def _dt_over_tau(self, i_pre: np.ndarray, ratio: float, layer: int,
                      n: int) -> np.ndarray:
         rf = self._rate_factor(n, layer)[None, :]
@@ -124,6 +131,7 @@ class TelegraphSource:
             return np.broadcast_to(ratio * rf, i_pre.shape)
         if self.rate_law is not None:
             grid, log_growth = self.rate_law
+            # np.interp holds the end value beyond the grid
             growth = np.exp(np.interp(np.abs(i_pre), grid, log_growth))
         else:
             growth = np.cosh(i_pre)

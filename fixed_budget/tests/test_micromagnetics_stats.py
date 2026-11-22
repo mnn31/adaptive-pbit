@@ -1,4 +1,6 @@
 # Author: Manan Gupta <mnn@yogins.com>
+"""Statistics, record reduction and script generation of micromagnetics/."""
+
 import json
 import sys
 from pathlib import Path
@@ -13,10 +15,12 @@ import mmstats as ms
 from mx3gen import disk_array_script, square_wave
 
 
+# a sampled telegraph series with the given rates, shape (n_steps, n_disks)
 def _telegraph(k_up=0.3, k_down=0.7, n_steps=20000, n_disks=64, dt=0.1, seed=0):
     return ms.telegraph_series(k_up, k_down, n_steps, n_disks, dt, np.random.default_rng(seed))
 
 
+# the telegraph null has the right P(+) and an exp(-t / tau_c) autocorrelation
 def test_telegraph_series_stationary_and_acf():
     k_up, k_down, dt = 0.3, 0.7, 0.1
     s = _telegraph(k_up, k_down, dt=dt)
@@ -30,6 +34,7 @@ def test_telegraph_series_stationary_and_acf():
     assert abs(ms.efold_time(c, dt) - 1.0) < 0.05
 
 
+# escape rates and dwell-shape statistics come out right on a long telegraph run
 def test_dwell_rates_with_censoring():
     # Sampling at dt shifts the survival curve by about rate x dt; keep that small here.
     s = _telegraph(n_steps=20000, dt=0.01)
@@ -42,6 +47,7 @@ def test_dwell_rates_with_censoring():
     assert abs(ms.short_dwell_excess(d[~first], c[~first], rate_up, frac=0.2) - 1) < 0.15
 
 
+# counting every run keeps the rate unbiased when a window holds only a few dwells
 def test_dwell_rate_unbiased_in_short_windows():
     # About seven runs per disk: dropping the flip that ends each first run would
     # give a rate about 15% low (tau 16 instead of 14).
@@ -54,6 +60,7 @@ def test_dwell_rate_unbiased_in_short_windows():
     assert abs(1 / np.mean(rates) - 14.0) < 0.5
 
 
+# run lengths and the censored and first flags on a six-sample series
 def test_dwell_times_bookkeeping():
     s = np.array([1, 1, -1, -1, -1, 1], dtype=np.int8)[:, None]
     dw = ms.dwell_times(s, 1.0)
@@ -65,12 +72,14 @@ def test_dwell_times_bookkeeping():
     assert (~dw[1][1]).sum() == 1 and (~dw[-1][1]).sum() == 1
 
 
+# with nothing censored, Kaplan-Meier is the empirical survival curve
 def test_km_matches_empirical_without_censoring():
     d = np.array([1.0, 2.0, 3.0, 4.0])
     _t, s = ms.km_survival(d, np.zeros(4, dtype=bool))
     assert np.allclose(s, [0.75, 0.5, 0.25, 0.0])
 
 
+# the hysteretic state ignores excursions that do not reach the far threshold
 def test_hysteretic_states_ignore_recrossings():
     m = np.array([0.8, 0.1, -0.1, 0.2, -0.5, -0.1, 0.3, 0.5])[:, None]
     s = ms.hysteretic_states(m, thr=0.4)[:, 0]
@@ -78,6 +87,7 @@ def test_hysteretic_states_ignore_recrossings():
     assert ms.sign_reads(m)[:, 0].tolist() == [1, 1, -1, 1, -1, -1, 1, 1]
 
 
+# stale reads of a telegraph series match the two-state propagator
 def test_stale_read_matches_propagator():
     k_up, k_down, dt = 0.3, 0.7, 0.1
     s = _telegraph(k_up, k_down, dt=dt, seed=3)
@@ -87,6 +97,7 @@ def test_stale_read_matches_propagator():
     assert np.allclose(meas, pred, atol=0.01)
 
 
+# histogram barrier and peaks of a two-peaked sample
 def test_histogram_barrier_of_bimodal_sample():
     rng = np.random.default_rng(1)
     m = np.clip(np.concatenate([rng.normal(0.8, 0.1, 50000), rng.normal(-0.8, 0.1, 50000),
@@ -95,6 +106,7 @@ def test_histogram_barrier_of_bimodal_sample():
     assert barrier > 3 and peaks[0] < -0.6 and peaks[1] > 0.6
 
 
+# well depths of a tilted double well, deeper well at m > 0
 def test_well_depths_of_tilted_double_well():
     centres = np.linspace(-0.99, 0.99, 100)
     energy = -2.0 * centres**2 + centres**4 - 0.5 * centres      # deeper well at m > 0
@@ -105,6 +117,7 @@ def test_well_depths_of_tilted_double_well():
     assert np.isclose(hi, np.log(dens.max() / dens[i_min]))
 
 
+# Brown's ratio is 1 at zero bias, cosh I at a high barrier and below cosh I at 3.5 kT
 def test_brown_ratio_limits():
     assert np.isclose(ms.brown_relax_ratio(0.0, 4.0), 1.0)
     # Exact form: (1 - h^2) exp(-delta h^2) (cosh I - h sinh I), h = I / (2 delta); cosh I at large delta.
@@ -113,12 +126,14 @@ def test_brown_ratio_limits():
     assert ms.brown_relax_ratio(2.0, 3.5) < np.cosh(2.0)
 
 
+# the fixed-asymptote step fit returns tau on an exact exponential
 def test_step_response_recovers_tau():
     t = np.arange(400) * 0.05
     curve = 0.6 + (-0.6 - 0.6) * np.exp(-t / 2.5)
     assert abs(ms.step_response(curve, 0.05, 0.6, -0.6) - 2.5) < 1e-6
 
 
+# the free fit finds tau and the asymptote, and a wrong fixed asymptote biases tau
 def test_step_fit_free_recovers_tau_and_asymptote():
     t = np.arange(2000) * 0.05
     curve = 0.6 - 1.2 * np.exp(-t / 2.5) + 0.002 * np.random.default_rng(0).standard_normal(len(t))
@@ -128,6 +143,7 @@ def test_step_fit_free_recovers_tau_and_asymptote():
     assert ms.step_response(curve, 0.05, 0.7, curve[0]) > 2.6
 
 
+# at the 1/e lag the stale-read probability is fixed by the definition of tau_c
 def test_stale_read_at_efold_time_is_fixed_by_the_acf():
     # At p = 1/2 the stale probability is (1 + C) / 2, so at the 1/e time it is
     # (1 + 1/e) / 2 whatever the process; agreement there is not a test.
@@ -137,6 +153,7 @@ def test_stale_read_at_efold_time_is_fixed_by_the_acf():
     assert abs(ms.stale_read(s, [lag])[0][0] - (1 + np.exp(-1)) / 2) < 0.01
 
 
+# the mumax3 script has one region and table column per disk and one Run per segment
 def test_script_generator():
     txt = disk_array_script(nx=2, ny=3, seed=4, schedule=square_wave(0.018, -0.018, 5e-9, 2))
     assert txt.count("DefRegion(") == 6 and txt.count("TableAdd(m.Comp(2)") == 6
@@ -144,6 +161,7 @@ def test_script_generator():
     assert "SetGridSize(64, 96, 1)" in txt
 
 
+# escape_rates agrees with the run-based estimator
 def test_escape_rates_match_run_estimator():
     s = _telegraph(n_steps=3000, n_disks=16, dt=0.05, seed=9)
     dw = ms.dwell_times(s, 0.05)
@@ -153,6 +171,7 @@ def test_escape_rates_match_run_estimator():
     assert n_up == (~dw[1][1]).sum() and n_dn == (~dw[-1][1]).sum()
 
 
+# escape rates are unbiased from half a tau_c to eight, while whole-dwell means are not
 @pytest.mark.parametrize("window", [0.5, 1.0, 2.0, 8.0])
 def test_escape_rates_unbiased_at_any_window(window):
     # Telegraph process with tau_c = 14 and asymmetric rates; window in units of tau_c.
@@ -170,8 +189,9 @@ def test_escape_rates_unbiased_at_any_window(window):
     assert 1 / (1 / whole[0] + 1 / whole[1]) / tau < 0.8
 
 
+# Fake bias points with I = slope B + cubic B^3 and tau = 10 / cosh I; a False entry
+# is a field with no measured logit.
 def _points(fields, slope=0.05, cubic=0.0, seeds=3):
-    """Bias points with I = slope B + cubic B^3 and tau = 10 / cosh I; a False entry is a field with no logit."""
     out = {}
     for b, measured in fields.items():
         i = slope * b + cubic * b ** 3
@@ -183,6 +203,7 @@ def _points(fields, slope=0.05, cubic=0.0, seeds=3):
     return out
 
 
+# on a bent map the odd cubics recover I at an unmeasured field and the line overshoots
 def test_field_fit_extrapolations_bracket_a_bent_map():
     fields = {b: True for b in (-36, -27, -18, -9, 0, 9, 18, 27, 36, 54, 72)} | {108: False}
     fit = analyze.field_fit(_points(fields, cubic=-5e-7))
@@ -199,6 +220,7 @@ def test_field_fit_extrapolations_bracket_a_bent_map():
     assert mirror["largest_measured"][0] < 0
 
 
+# a point where some seed never left one state is not used as a measurement
 def test_field_fit_ignores_points_with_unvisited_seeds():
     pts = _points({b: True for b in (-36, -18, 0, 18, 36, 72)})
     pts[72]["I"] = [9.9, 0.1]              # mean over the seeds that did visit: not a measurement
@@ -208,6 +230,7 @@ def test_field_fit_ignores_points_with_unvisited_seeds():
     assert np.isclose(fit["extrapolated_I"][72.0]["odd_cubic_all_measured"][0], 3.6)
 
 
+# the step slowdown is given for every estimate of I and both asymptotes
 def test_step_over_cosh_per_estimate_of_I():
     rec = {"tau_step": {"eq_asymptote": [2.0, 0.1], "free": [2.5, 0.1]}}
     out = analyze.step_over_cosh(rec, [10.0, 0.0], {"a": [2.0, np.nan], "b": [3.0, np.nan]})
@@ -216,6 +239,7 @@ def test_step_over_cosh_per_estimate_of_I():
     assert np.isclose(out["free"]["b"][0], 0.25 * np.cosh(3.0))
 
 
+# pooling +B with mirrored -B doubles the seeds and keeps I and the cosh ratio
 def test_time_step_pooled_mirrors_negative_fields():
     pts = _points({0: True, 18: True, -18: True})
     row = analyze.time_step_pooled({"25": pts, "50": pts})[18]
@@ -225,6 +249,7 @@ def test_time_step_pooled_mirrors_negative_fields():
     assert row["25_minus_50"]["tau_efold"]["diff"] == 0
 
 
+# only the 1/e-time prediction at r0 = 1 is flagged by_construction
 def test_stale_block_marks_the_definitional_row():
     s = _telegraph(0.5, 0.5, n_steps=4000, dt=0.05)
     tau = ms.efold_time(ms.autocorr(s, 200), 0.05)
@@ -235,6 +260,7 @@ def test_stale_block_marks_the_definitional_row():
     assert flagged == [(1, "telegraph_efold")]
 
 
+# finer cells, larger pitch and per-segment currents appear in the script
 def test_script_generator_finer_mesh_and_current_steps():
     base = disk_array_script(nx=2, ny=2, seed=1)
     assert "SetCellSize(2e-09, 2e-09, 1e-09)" in base and "J = " not in base
@@ -248,11 +274,13 @@ def test_script_generator_finer_mesh_and_current_steps():
     assert lines[lines.index("J = vector(0, 0, 4e+10)") + 2] == "Run(2e-09)"
 
 
+# write a series in the packed-run format that analyze.load reads
 def _packed_run(path, s, dt, meta):
     np.savez_compressed(f"{path}.npz", t=np.arange(len(s)) * dt * 1e-9, m=0.9 * s.astype(np.float16))
     Path(f"{path}.json").write_text(json.dumps(meta))
 
 
+# a telegraph process under a square-wave drive gives a step time on the cosh law
 def test_current_steps_recover_the_telegraph_step_time(tmp_path):
     # A telegraph process driven by a square wave between I = -1.5 and +1.5: its step
     # time is tau_c(0) / cosh I, so the ratio to the cosh law is 1.
@@ -283,6 +311,7 @@ def test_current_steps_recover_the_telegraph_step_time(tmp_path):
         assert abs(next(iter(ratio.values()))[0] - 1) < 0.15
 
 
+# read_change divides the measured change probability by the telegraph one
 def test_read_change_is_measured_over_telegraph():
     rows = [{"r0": 0.02, "measured": {"all": [0.98, 0.001]},
              "telegraph_efold": {"all": 0.99, "by_construction": False}}]

@@ -12,6 +12,7 @@ SCRIPT = ROOT / "experiments" / "fig_letter.py"
 TABLE = ROOT / "results" / "sllg_matched" / "classifier_table.json"
 
 
+# the script runs on the stored records and writes non-empty PDFs
 @pytest.mark.skipif(not TABLE.exists() or not (ROOT / "results" / "v2").exists(),
                     reason="stored records missing")
 def test_figures_are_drawn(tmp_path):

@@ -30,6 +30,9 @@ from smtjnn.train import train
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# Train one network on the macrospin of dev_dir at read ratio r0 and training seed
+# `seed`, then write the checkpoint and its training record. Skips if the checkpoint
+# exists.
 def main(dev_dir, r0, seed, gpu, dt=1e-12):
     dev_dir = Path(dev_dir).resolve()
     ckpt = dev_dir / "nets" / f"sllg_na{r0:g}_seed{seed}.pt"
@@ -45,6 +48,7 @@ def main(dev_dir, r0, seed, gpu, dt=1e-12):
                           noise_seed=123 + seed, device=gpu)
     lines = []
 
+    # print a training line and keep it for the record
     def log(msg):
         print(msg, flush=True)
         lines.append(msg)

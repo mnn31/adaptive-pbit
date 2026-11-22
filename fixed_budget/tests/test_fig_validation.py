@@ -1,4 +1,6 @@
 # Author: Manan Gupta <mnn@yogins.com>
+"""Helpers and record build of experiments/fig_validation.py (Fig. 1)."""
+
 import json
 import sys
 from pathlib import Path
@@ -10,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments"))
 import fig_validation as fv
 
 
+# 1/e time, memory fit and log interpolation all return tau for an exponential
 def test_time_helpers_on_an_exponential():
     t = np.geomspace(0.01, 50, 400)
     c = np.exp(-t / 3.0)
@@ -18,12 +21,15 @@ def test_time_helpers_on_an_exponential():
     assert abs(fv.at(t, c, 3.0) - np.exp(-1)) < 1e-3
 
 
+# the cosh ratio and its error on simple numbers
 def test_cosh_ratio():
     assert fv.cosh_ratio([2.0, 0.0], [4.0, 0.0], [0.0, 0.0]) == [0.5, 0.0]
     r, e = fv.cosh_ratio([1.0, 0.1], [2.0, 0.0], [1.0, 0.0])
     assert np.isclose(r, np.cosh(1.0) / 2) and np.isclose(e, r * 0.1)
 
 
+# the validation record builds from the stored records and its by-construction rows are
+# the right ones
 @pytest.mark.skipif(not (fv.MUMAX / "device_p_equilibrium.json").exists()
                     or not (fv.SLLG / "device.json").exists(), reason="stored records missing")
 def test_build_from_stored_records(tmp_path, monkeypatch):
@@ -54,6 +60,7 @@ def test_build_from_stored_records(tmp_path, monkeypatch):
             assert np.isclose(s["tau_over_cosh"][label][0], s["tau_over_tau0"][0] * np.cosh(i))
 
 
+# ratio adds relative errors in quadrature and treats a missing error as zero
 def test_ratio_carries_both_errors():
     r, e = fv.ratio([2.0, 0.2], [4.0, 0.4])
     assert np.isclose(r, 0.5) and np.isclose(e, 0.5 * np.hypot(0.1, 0.1))

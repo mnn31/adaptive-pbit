@@ -27,8 +27,9 @@ CACHE = os.environ.get("MUMAX3_CACHE", "/workspace/lmag/mumax/cache")
 MPS_PIPE = os.environ.get("CUDA_MPS_PIPE_DIRECTORY", "/workspace/lmag/mps/pipe")
 
 
+# Pack <name>.out/table.txt into <name>.npz (time and float16 per-disk
+# magnetization) and delete the text table.
 def pack(rundir, name):
-    """Convert <name>.out/table.txt to <name>.npz and drop the text table."""
     header, data = read_table(rundir / f"{name}.out" / "table.txt")
     cols = [i for i, h in enumerate(header) if ".region" in h]
     np.savez_compressed(rundir / f"{name}.npz", t=data[:, 0],
@@ -37,8 +38,9 @@ def pack(rundir, name):
     (rundir / f"{name}.out" / "table.txt").unlink()
 
 
+# One slot: keep claiming unfinished jobs and running mumax3 on them until a full
+# pass over the list finds nothing left to claim.
 def worker(rundir, names, gpu, log, stop_file=None):
-    """Take unclaimed jobs until a full pass finds none (claims freed by others are retried)."""
     env = dict(os.environ, LD_LIBRARY_PATH=f"{MX}/lib",
                CUDA_MPS_PIPE_DIRECTORY=MPS_PIPE)
     claimed = True
@@ -49,6 +51,7 @@ def worker(rundir, names, gpu, log, stop_file=None):
                 return
             if (rundir / f"{name}.done").exists():
                 continue
+            # mkdir is atomic, so only one runner can claim a job
             try:
                 (rundir / f"{name}.claim").mkdir()
             except FileExistsError:
@@ -66,6 +69,7 @@ def worker(rundir, names, gpu, log, stop_file=None):
             log(f"{name} rc={rc} {time.time() - t0:.0f}s gpu{gpu}")
 
 
+# Start --slots worker threads on one GPU over the jobs listed in RUNDIR/jobs.txt.
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("rundir")
@@ -76,6 +80,7 @@ def main():
     ap.add_argument("--stop-file", help="stop claiming new jobs once this file exists")
     a = ap.parse_args()
     rundir = Path(a.rundir)
+    # jobs.txt lists the .mx3 files; strip the extension
     names = [ln.strip()[:-4] for ln in (rundir / "jobs.txt").read_text().split() if ln.strip()]
     if a.reclaim:
         for n in names:
@@ -85,6 +90,7 @@ def main():
         names = names[::-1]
     lock = threading.Lock()
 
+    # timestamped line, one thread at a time
     def log(msg):
         with lock:
             print(time.strftime("%H:%M:%S"), msg, flush=True)

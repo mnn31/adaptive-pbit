@@ -20,6 +20,7 @@ FAST = Macrospin(delta=3.5, moment=72.28, alpha=1.0)  # same statics, quicker
 HAS_KERNEL = torch.cuda.is_available() and sllg.triton is not None
 
 
+# n spins tilted by theta from +z in the x-z plane
 def _tilted(theta, n=1):
     m = torch.zeros(3, n, dtype=torch.float64)
     m[0], m[2] = np.sin(theta), np.cos(theta)
@@ -28,6 +29,8 @@ def _tilted(theta, n=1):
 
 # ---------- zero temperature ----------
 
+# at zero temperature the precession frequency and small-angle damping match the LLG
+# values
 def test_precession_frequency_and_damping():
     dev = Macrospin(3.5, 72.28, alpha=0.01)
     theta, b_z, dt = 0.05, 0.05, 1e-13
@@ -53,6 +56,7 @@ def test_precession_frequency_and_damping():
     assert abs(th_end / (theta * np.exp(-dev.alpha * w0 * t_end)) - 1) < 0.01
 
 
+# the Triton kernel follows the float64 reference stepper without noise
 @pytest.mark.skipif(not HAS_KERNEL, reason="needs CUDA and Triton")
 def test_kernel_matches_reference_at_zero_temperature():
     rng = np.random.default_rng(0)
@@ -69,12 +73,14 @@ def test_kernel_matches_reference_at_zero_temperature():
 
 # ---------- equilibrium ----------
 
+# matched_device hits the requested logit slope, and P(+) = 1/2 at zero field
 def test_matched_device_has_requested_slope():
     dev = matched_device(3.5, 56.0)
     assert abs(sllg.logit_slope(dev) / 56.0 - 1) < 1e-6
     assert abs(sllg.equilibrium_p_plus(dev, 0.0) - 0.5) < 1e-12
 
 
+# sampled directions have the exact Boltzmann <mz^2> and <sign mz> and unit length
 def test_equilibrium_sampler_matches_boltzmann():
     rng = np.random.default_rng(1)
     for b in [0.0, 0.02]:
@@ -85,6 +91,7 @@ def test_equilibrium_sampler_matches_boltzmann():
         assert np.allclose((m ** 2).sum(0), 1.0)
 
 
+# the CPU dynamics relax from +z to the Boltzmann P(+) and <mz^2>
 @pytest.mark.parametrize("b_z", [0.0, 1.0 / 56.0])
 def test_dynamics_relax_to_boltzmann(b_z):
     # start every spin at +z, let the thermal dynamics equilibrate, then
@@ -102,6 +109,7 @@ def test_dynamics_relax_to_boltzmann(b_z):
     assert abs(np.mean(mz2) - ex["mz2"]) < 0.01
 
 
+# the GPU kernel keeps spins drawn from equilibrium in equilibrium
 @pytest.mark.skipif(not HAS_KERNEL, reason="needs CUDA and Triton")
 @pytest.mark.parametrize("b_z", [0.0, 1.0 / 56.0, 3.0 / 56.0])
 def test_kernel_holds_boltzmann(b_z):
@@ -124,6 +132,7 @@ def test_kernel_holds_boltzmann(b_z):
     assert abs(np.mean(mz2) - ex["mz2"]) < 0.002
 
 
+# the read correlation across 1 ns agrees at dt = 0.5 and 2 ps
 def test_read_correlation_converges_in_dt():
     # correlation of sign(mz) across 1 ns from exact equilibrium, two steps
     lag = 1e-9
@@ -143,6 +152,8 @@ def test_read_correlation_converges_in_dt():
 
 # ---------- classifier sources ----------
 
+# MacrospinSource gives +-1 reads, settles to P(+) at I = 1, and keeps state between
+# fast reads
 def test_source_reads_and_settle():
     src = MacrospinSource(r0=0.05, dev=FAST, tau_c0=2.5e-9,
                           tesla_per_unit_i=1 / 56.0, dt=2e-12,
@@ -162,6 +173,7 @@ def test_source_reads_and_settle():
         src.sample(torch.zeros(2, 3), layer=0)
 
 
+# EquilibriumSource has the device's P(+), symmetric about I = 0 and saturating at 1
 def test_equilibrium_source_shape():
     src = EquilibriumSource(DEV, 1 / 56.0, seed=0)
     p = src.p_plus(np.array([-1.0, 0.0, 1.0, 100.0]))

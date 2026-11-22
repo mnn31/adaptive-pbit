@@ -11,21 +11,24 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 
+# Load a mumax3 table.txt into (column names, float64 array), reading the numbers
+# in one pass.
 def read_table(path):
-    """Load a mumax3 table.txt into (header, array) quickly."""
     with open(path) as f:
         header = f.readline().lstrip("# ").rstrip("\n").split("\t")
         data = np.array(f.read().split(), dtype=np.float64)
     return header, data.reshape(-1, len(header))
 
 
+# Thresholded reads +-1 as int8. An exact zero, which does not occur in practice,
+# reads as +1.
 def sign_reads(m):
-    """Thresholded reads +-1 (exact zeros, which do not occur in practice, read as +1)."""
     return np.where(m >= 0, 1, -1).astype(np.int8)
 
 
+# State that switches only when m crosses the far threshold +-thr, starting at
+# sign(m[0]). Short excursions across m = 0 do not count as flips here.
 def hysteretic_states(m, thr=0.4):
-    """State that switches only when m crosses the far threshold (+-thr); starts at sign(m[0])."""
     m = np.asarray(m)
     s = np.empty(m.shape, dtype=np.int8)
     cur = sign_reads(m[0])
@@ -35,6 +38,8 @@ def hysteretic_states(m, thr=0.4):
     return s
 
 
+# Run lengths (in the units of dt) of a +-1 series, split by state, with flags for
+# the censored last run and the first run of each disk.
 def dwell_times(s, dt):
     """Run lengths of a +-1 series per disk.
 
@@ -59,6 +64,7 @@ def dwell_times(s, dt):
             for st, (d, c, f) in out.items()}
 
 
+# Escape rate out of one state (per unit of dt) from its runs.
 def exp_rate_mle(durations, censored):
     """Escape rate: flips out of a state / time spent in it (exponential MLE, right censoring).
 
@@ -71,6 +77,7 @@ def exp_rate_mle(durations, censored):
     return n / total if total > 0 else np.nan
 
 
+# Escape rates out of + and out of - and the flip counts, straight from the series.
 def escape_rates(s, dt):
     """Escape rates (k_out_of_up, k_out_of_down) of a +-1 series (time, disk), and the flip counts.
 
@@ -88,18 +95,21 @@ def escape_rates(s, dt):
     return k_up, k_dn, n_up, n_dn
 
 
+# Kaplan-Meier survival curve of the dwell times; returns (times, S(t)) at each
+# completed run.
 def km_survival(durations, censored):
-    """Kaplan-Meier survival curve; returns (times, S(t)) at each completed-run time."""
     order = np.argsort(durations, kind="stable")
     d = durations[order]
     c = censored[order]
     at_risk = len(d) - np.arange(len(d))
+    # a censored run leaves the risk set without a drop in S
     factors = np.where(c, 1.0, 1.0 - 1.0 / at_risk)
     surv = np.cumprod(factors)
     keep = ~c
     return d[keep], surv[keep]
 
 
+# Largest gap D between the dwell survival curve and the exponential at `rate`.
 def exp_deviation(durations, censored, rate):
     """Largest gap between the Kaplan-Meier survival and exp(-rate t) (KS-like D).
 
@@ -114,8 +124,9 @@ def exp_deviation(durations, censored, rate):
     return float(max(np.abs(s - model).max(), np.abs(before - model).max()))
 
 
+# Kaplan-Meier fraction of whole dwells shorter than frac / rate, divided by the
+# exponential value. Above 1 means too many very short dwells.
 def short_dwell_excess(durations, censored, rate, frac=0.05):
-    """Kaplan-Meier fraction of whole dwells shorter than frac / rate, over the exponential value."""
     t, s = km_survival(durations, censored)
     if len(t) == 0:
         return np.nan
@@ -125,8 +136,9 @@ def short_dwell_excess(durations, censored, rate, frac=0.05):
     return float(observed / (1 - np.exp(-rate * cut)))
 
 
+# Exactly sampled telegraph process (+-1) with rates k_up and k_down, shape
+# (n_steps, n_disks). The null model for the dwell tests.
 def telegraph_series(k_up, k_down, n_steps, n_disks, dt, rng, p0=None):
-    """Exact sampled telegraph process (+-1), used as the null model for dwell tests."""
     p = k_up / (k_up + k_down)
     stay_up = p + (1 - p) * np.exp(-(k_up + k_down) * dt)
     stay_dn = 1 - p * (1 - np.exp(-(k_up + k_down) * dt))
@@ -139,6 +151,7 @@ def telegraph_series(k_up, k_down, n_steps, n_disks, dt, rng, p0=None):
     return s
 
 
+# Normalized autocorrelation of a (time, disk) series by FFT, lags 0..max_lag.
 def autocorr(s, max_lag):
     """Normalized autocorrelation of a (time, disk) series, lags 0..max_lag.
 
@@ -150,6 +163,7 @@ def autocorr(s, max_lag):
     n = x.shape[0]
     if max_lag >= n:
         raise ValueError("max_lag must be shorter than the series")
+    # zero-pad to a power of two >= 2n so the FFT sum is linear, not circular
     size = 1 << int(np.ceil(np.log2(2 * n)))
     f = np.fft.rfft(x, n=size, axis=0)
     acov = np.fft.irfft(f * np.conj(f), n=size, axis=0)[: max_lag + 1].sum(axis=1)
@@ -159,8 +173,9 @@ def autocorr(s, max_lag):
     return acov / acov[0]
 
 
+# First time the autocorrelation falls below 1/e, linearly interpolated, in the
+# units of dt.
 def efold_time(c, dt):
-    """First time the autocorrelation falls below 1/e (linear interpolation)."""
     below = np.flatnonzero(c < np.exp(-1))
     if len(below) == 0:
         return np.nan
@@ -169,6 +184,7 @@ def efold_time(c, dt):
     return float((i - 1 + (c0 - np.exp(-1)) / (c0 - c1)) * dt)
 
 
+# Exponential fit to the middle stretch of the autocorrelation: returns (tau, A).
 def fit_exp_tail(c, dt, lo=0.6, hi=0.2):
     """Fit C(t) = A exp(-t/tau) on the stretch where lo >= C >= hi.
 
@@ -185,8 +201,9 @@ def fit_exp_tail(c, dt, lo=0.6, hi=0.2):
     return float(-1 / slope), float(np.exp(icpt))
 
 
+# P(s(t + lag) = s(t)) overall and given s(t) = +1 or -1, pooled over disks; one
+# row per lag.
 def stale_read(s, lags):
-    """P(s(t+lag) = s(t)) overall and given s(t) = +1 or -1, pooled over disks."""
     s = np.asarray(s)
     rows = []
     for lag in lags:
@@ -198,16 +215,18 @@ def stale_read(s, lags):
     return np.array(rows)
 
 
+# Telegraph prediction of the stale-read probability at x = lag / tau_c:
+# (overall, from +, from -).
 def telegraph_stale(p, x):
-    """Telegraph prediction of stale-read probability at x = lag / tau_c: (overall, from +, from -)."""
     e = np.exp(-np.asarray(x, dtype=np.float64))
     from_up = p + (1 - p) * e
     from_dn = 1 - p * (1 - e)
     return p * from_up + (1 - p) * from_dn, from_up, from_dn
 
 
+# Density of m on [-1, 1] and the histogram barrier ln[P(peak) / P(0)] in kT, with
+# the two peak positions.
 def mz_histogram(m, bins=100):
-    """Density of m on [-1, 1] and the effective barrier ln[P(peak) / P(0)] in kT."""
     dens, edges = np.histogram(np.asarray(m).ravel(), bins=bins, range=(-1, 1), density=True)
     centres = (edges[:-1] + edges[1:]) / 2
     mid = dens[np.abs(centres) < 0.1].mean()
@@ -217,6 +236,7 @@ def mz_histogram(m, bins=100):
     return dens, centres, float(barrier), peaks
 
 
+# Depth of each well in kT from the density histogram, and where the saddle is.
 def well_depths(dens, centres, window=0.6):
     """Depths (kT) of the m < 0 and m > 0 wells: ln of each peak density over the saddle density.
 
@@ -233,6 +253,7 @@ def well_depths(dens, centres, window=0.6):
     return float(lo), float(hi), float(centres[j])
 
 
+# tau_c(0) / tau_c(I) from Brown's high-barrier rates; a reference only at a few kT.
 def brown_relax_ratio(i, delta):
     """tau_c(0) / tau_c(I) from the high-barrier formula for an axially symmetric macrospin.
 
@@ -247,6 +268,7 @@ def brown_relax_ratio(i, delta):
     return rate / (2 * np.exp(-delta))
 
 
+# Relaxation time of the read mean after a bias step, with the asymptote given.
 def step_response(mean_s, dt, p, s0):
     """Fit mean_s(t) = p + (s0 - p) exp(-t/tau) after a bias step; returns tau.
 
@@ -263,10 +285,12 @@ def step_response(mean_s, dt, p, s0):
     return float(-1 / slope)
 
 
+# Least-squares fit of mean_s(t) = s_inf + a exp(-t/tau) with all three free;
+# returns (tau, s_inf), or NaNs if the fit fails.
 def step_fit_free(mean_s, dt):
-    """Least-squares fit of mean_s(t) = s_inf + a exp(-t/tau), all three free; returns (tau, s_inf)."""
     y = np.asarray(mean_s, dtype=np.float64)
     t = np.arange(len(y)) * dt
+    # starting values: asymptote from the last fifth, tau from the first 1/e crossing
     tail = y[-(len(y) // 5):].mean()
     a0 = y[0] - tail
     if a0 == 0:

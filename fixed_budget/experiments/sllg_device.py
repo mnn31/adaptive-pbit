@@ -5,7 +5,7 @@ The macrospin has three parameters: barrier delta (kT), logit slope (I per
 mT of perpendicular field) and alpha. They are options:
 
   --delta, --slope   set them directly (defaults 3.5 kT and 0.056 per mT,
-                     the setup-pilot values; records in results/sllg/)
+                     the first device set; records in results/sllg/)
   --part match       choose them from a mumax3 record (default
                      results/micromagnetics/summary.json): the slope is the
                      measured field-to-I slope, and the barrier is the one
@@ -95,10 +95,12 @@ EASY_PLANE = Macrospin(delta=-39.05, moment=77.26, alpha=ALPHA)
 BLOCKS = 16                # spin blocks for standard errors
 
 
+# the macrospin for the current DEVICE barrier and slope, at damping alpha
 def device_p(alpha=ALPHA):
     return matched_device(DEVICE["delta"], DEVICE["slope"], alpha)
 
 
+# code hashes, torch version and time, stamped into every record
 def provenance():
     files = [Path(sllg.__file__), Path(__file__),
              ROOT / "micromagnetics" / "analyze.py"]
@@ -108,6 +110,7 @@ def provenance():
             "time": time.strftime("%Y-%m-%d %H:%M:%S")}
 
 
+# write one JSON record to OUT with the provenance attached
 def save(name, rec):
     OUT.mkdir(parents=True, exist_ok=True)
     rec = dict(rec, **provenance())
@@ -115,16 +118,20 @@ def save(name, rec):
     print("wrote", name, flush=True)
 
 
+# read back a record that an earlier part wrote to OUT
 def load(name):
     return json.loads((OUT / name).read_text())
 
 
+# device parameters as stored in the records
 def dev_dict(dev, dt):
     return {"delta": dev.delta, "moment_per_T": dev.moment,
             "alpha": dev.alpha, "b_anis_T": dev.b_anis, "dt_s": dt}
 
 
 # ------------------------------------------------------------- simulation
+# Equilibrium run of n spins at a held field b_z (T) for `duration` (s). Returns the
+# sampled reads and the histograms the bias and easy-plane parts need.
 def simulate(dev, b_z, n, duration, dt, seed, gpu, axis=2, burn=2e-9,
              every=None):
     """Record sign(m[axis]) and the hysteretic +-0.4 state of n spins.
@@ -150,6 +157,7 @@ def simulate(dev, b_z, n, duration, dt, seed, gpu, axis=2, burn=2e-9,
         arr.run(b, every)
         c = arr.m[axis]
         sign[t] = torch.where(c >= 0, 1, -1).to(torch.int8)
+        # hysteretic state: changes only when m crosses the far threshold +-0.4
         state = torch.where(c > 0.4, 1, torch.where(c < -0.4, -1, state))
         state = state.to(torch.int8)
         hyst[t] = state
@@ -162,8 +170,9 @@ def simulate(dev, b_z, n, duration, dt, seed, gpu, axis=2, burn=2e-9,
             "mz2": mz2, "sample_s": every * dt}
 
 
+# Normalized autocorrelation of a +-1 series [n, T] up to max_lag samples, computed
+# by FFT separately for each spin block. Returns [BLOCKS, max_lag + 1].
 def acf_blocks(series, max_lag):
-    """Normalized ACF of a +-1 series [n, T], per spin block: [BLOCKS, lags]."""
     n, T = series.shape
     mean = series.float().mean()
     out = []
@@ -172,6 +181,7 @@ def acf_blocks(series, max_lag):
                           device=series.device)
         for sub in torch.split(blk, 512):
             x = series[sub].float() - mean
+            # zero-padded to 2T so the FFT gives the linear autocovariance
             f = torch.fft.rfft(x, n=2 * T)
             c = torch.fft.irfft(f.abs() ** 2, n=2 * T)[:, :max_lag + 1]
             acc += c.double().sum(0)
@@ -181,8 +191,9 @@ def acf_blocks(series, max_lag):
     return np.array(out)
 
 
+# Exponential fit to the ACF over its first stretch from hi down to lo. Returns the
+# time constant (s) and the amplitude, or NaNs if the stretch is too short.
 def fit_tail(t, c, hi=0.8, lo=0.05):
-    """Exponential fit of the ACF over its first stretch from hi down to lo."""
     below_hi = np.nonzero(c <= hi)[0]
     if below_hi.size == 0:
         return np.nan, np.nan
@@ -195,8 +206,8 @@ def fit_tail(t, c, hi=0.8, lo=0.05):
     return -1.0 / slope, float(np.exp(icpt))
 
 
+# First time the ACF falls below 1/e, linearly interpolated between samples.
 def e_time(t, c):
-    """First time the ACF falls below 1/e (linear interpolation)."""
     k = np.nonzero(c < np.exp(-1))[0]
     if k.size == 0 or k[0] == 0:
         return np.nan
@@ -205,11 +216,12 @@ def e_time(t, c):
     return float(t[k - 1] + (y0 - np.exp(-1)) / (y0 - y1) * (t[k] - t[k - 1]))
 
 
+# Area under the ACF up to index cut (trapezoid), in s.
 def integrated_time(t, c, cut):
-    """Area under the ACF up to index cut (trapezoid)."""
     return float(np.sum(0.5 * (c[1:cut + 1] + c[:cut]) * np.diff(t[:cut + 1])))
 
 
+# mean and standard error of the finite entries; None where there are too few
 def mean_se(x):
     x = np.asarray(x, dtype=float)
     x = x[np.isfinite(x)]
@@ -218,6 +230,8 @@ def mean_se(x):
     return [float(x.mean()), float(x.std(ddof=1) / np.sqrt(x.size))]
 
 
+# The three time scales of a read series (1/e, tail fit, integrated area), each
+# with a block standard error, and the ACF itself on a log-spaced lag grid.
 def acf_summary(series, sample_s, max_time):
     max_lag = min(int(max_time / sample_s), series.shape[1] // 2)
     blocks = acf_blocks(series, max_lag)
@@ -246,8 +260,9 @@ def acf_summary(series, sample_s, max_time):
             .tolist()}
 
 
+# Probability that a read is unchanged after `lag` samples, given + or - first, and
+# the read ACF at that lag, each as mean and SE over spin blocks.
 def stale_reads(series, lag):
-    """P(same read after lag | +), P(same | -), and the read ACF, with SEs."""
     rows = []
     for blk in torch.chunk(torch.arange(series.shape[0],
                                         device=series.device), BLOCKS):
@@ -270,14 +285,17 @@ def stale_reads(series, lag):
             enumerate(["p_same_plus", "p_same_minus", "acf"])}
 
 
+# The telegraph model's stale-read values at input i after a lag of
+# lag_over_tau0 zero-bias correlation times (cosh-law rate).
 def telegraph_stale(i, lag_over_tau0):
-    """The telegraph model's stale-read values at input i (Arrhenius class)."""
     p = 0.5 * (1 + np.tanh(i))
     e = float(np.exp(-lag_over_tau0 * np.cosh(i)))
     return {"i": float(i), "p_same_plus": float(p + (1 - p) * e),
             "p_same_minus": float(1 - p + p * e), "acf": e}
 
 
+# Correlation time at input i (field b_z in T) under the cosh, barrier-shift and
+# Brown laws, each normalized to tau0 at zero bias.
 def tau_laws(i, b_z, dev, tau0):
     """tau_c at input i under the three model laws, each tau0 at zero bias.
 
@@ -292,6 +310,7 @@ def tau_laws(i, b_z, dev, tau0):
            "tau_shift_s": float(tau0 * np.exp(i ** 2 / (4 * dev.delta))
                                 / np.cosh(i)),
            "tau_brown_s": None}
+    # above h = 1 the minority well is gone and the formula has no meaning
     if h < 1:
         rate = (1 - h ** 2) * sum(
             (1 + s * h) * np.exp(-dev.delta * ((1 + s * h) ** 2 - 1))
@@ -300,6 +319,8 @@ def tau_laws(i, b_z, dev, tau0):
     return out
 
 
+# Escape rate and dwell-time shape for the + and - states of a read series, with
+# the same estimator as the mumax3 analysis.
 def dwell_stats(series_cpu, sample_s):
     """Escape rate and dwell shape per state, by the mumax3 analysis's estimator.
 
@@ -319,11 +340,14 @@ def dwell_stats(series_cpu, sample_s):
     return out
 
 
+# Density of m along the read axis from the 200-bin histogram, with the barrier
+# from peak over centre density and the weight near the equator.
 def histogram_summary(hist):
     centers = np.linspace(-1, 1, 201)
     centers = 0.5 * (centers[1:] + centers[:-1])
     p = hist / hist.sum()
     dens = p / (2.0 / 200)
+    # centre density from the four bins around mz = 0
     mid = dens[98:102].mean()
     peak = dens.max()
     return {"centers": centers.tolist(), "density": dens.tolist(),
@@ -335,6 +359,7 @@ def histogram_summary(hist):
 
 
 # ------------------------------------------------------------------ parts
+# Time-step check: tau_c(0), P(+) and <mz^2> at I = 0 and 1 for four values of dt.
 def part_dt(gpu):
     dev = device_p()
     rows = []
@@ -361,6 +386,8 @@ def part_dt(gpu):
                             "duration_s": 300e-9, "rows": rows})
 
 
+# One equilibrium run per bias point in I_TARGETS; skips points already on disk so
+# the part can be restarted.
 def part_bias(gpu, n=16384, duration=400e-9):
     dev = device_p()
     tau0 = None
@@ -411,6 +438,8 @@ def part_bias(gpu, n=16384, duration=400e-9):
         torch.cuda.empty_cache()
 
 
+# Ensemble step response after each field step in STEPS, starting from exact
+# equilibrium at the old field. Needs the zero-bias record from part_bias for tau0.
 def part_step(gpu, n=262144):
     dev = device_p()
     tau0 = load("device_bias_I+0.json")["acf"]["tau_1e_s"]
@@ -481,6 +510,7 @@ def part_step(gpu, n=262144):
                               "rows": rows})
 
 
+# Zero-bias correlation time at alpha = 0.03 and at the default 0.1.
 def part_alpha(gpu):
     rows = []
     for alpha in [0.03, 0.1]:
@@ -496,6 +526,7 @@ def part_alpha(gpu):
                                "rows": rows})
 
 
+# Easy-plane control (no perpendicular anisotropy), read along x, at two time steps.
 def part_easyplane(gpu, n=8192, duration=20e-9):
     dev = EASY_PLANE
     rows = []
@@ -526,6 +557,8 @@ def part_easyplane(gpu, n=8192, duration=20e-9):
                                    "rows": rows})
 
 
+# Collect the bias records into device.json: the field-to-I slope and its fit
+# quality, tau_c(0) with its replicate spread, and the model laws at each point.
 def part_summary():
     dev = device_p()
     pts = [load(f"device_bias_I{i:+g}.json") for i in I_TARGETS]
@@ -558,6 +591,7 @@ def part_summary():
                  for r in load("device_alpha.json")["rows"]
                  if r["device"]["alpha"] == ALPHA]
 
+    # mean and SD of one time scale over the zero-bias replicate runs
     def spread(key, name):
         v = [r[key] for r in reps]
         return {f"{name}_mean_s": float(np.mean(v)),
@@ -613,8 +647,9 @@ def part_summary():
                      indent=1))
 
 
+# Fit the macrospin to a mumax3 record: take its field-to-I slope, then find the
+# barrier whose zero-bias 1/e read time equals the mumax3 tau_c(0).
 def part_match(mumax_summary):
-    """Slope from the mumax3 record; barrier so that the 1/e times agree."""
     mm = json.loads(Path(mumax_summary).read_text())
     tau, tau_se = (x * 1e-9 for x in mm["tau_c0_ns"])
     slope, slope_se = (x * 1e3 for x in mm["field_slope_I_per_mT"])
@@ -639,8 +674,9 @@ def part_match(mumax_summary):
     print(json.dumps(rec, indent=1))
 
 
+# Pick the output directory and the device; match.json in --out wins over
+# --delta/--slope for every part but match itself.
 def configure(args):
-    """Pick the output directory and the device (match.json wins if present)."""
     global OUT
     OUT = Path(args.out).resolve()
     DEVICE.update(delta=args.delta, slope=args.slope * 1e3)

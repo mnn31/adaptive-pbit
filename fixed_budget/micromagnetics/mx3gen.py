@@ -13,6 +13,8 @@ CELL = 2e-9         # in-plane cell size (m)
 THICK = 1e-9        # film thickness, one cell (m)
 
 
+# Text of one mumax3 script for an nx x ny array of identical disks (lengths in m,
+# fields in T, times in s); the arguments are explained in the docstring.
 def disk_array_script(nx=16, ny=15, pitch=32, diam=20e-9, ku=6.0e5, ms=1.0e6,
                       aex=15e-12, alpha=0.1, dt=50e-15, save=10e-12, seed=1,
                       p_up=0.5, comps="z", schedule=((0.0, 100e-9),),
@@ -61,6 +63,7 @@ def disk_array_script(nx=16, ny=15, pitch=32, diam=20e-9, ku=6.0e5, ms=1.0e6,
                 lines.append(f"TableAdd(m.Region({k}))")
     if energies:
         lines += ["TableAdd(E_demag)", "TableAdd(E_anis)", "TableAdd(E_exch)"]
+    # thermal field at 300 K, fixed-step Heun (solver 2), then the bias schedule
     axis = {"x": "vector({b}, 0, 0)", "z": "vector(0, 0, {b})"}[field_axis]
     lines += ["Temp = 300", f"ThermSeed({seed})", "SetSolver(2)", f"FixDt = {dt}",
               f"TableAutoSave({save})"]
@@ -72,6 +75,7 @@ def disk_array_script(nx=16, ny=15, pitch=32, diam=20e-9, ku=6.0e5, ms=1.0e6,
     return "\n".join(lines) + "\n"
 
 
+# Schedule alternating b_low and b_high (T), each for `half` (s), for `periods` full
+# periods. Used for the step-response runs.
 def square_wave(b_low, b_high, half, periods):
-    """Schedule alternating b_low and b_high for `periods` full periods."""
     return [(b, half) for _ in range(periods) for b in (b_low, b_high)]

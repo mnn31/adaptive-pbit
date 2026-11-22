@@ -50,12 +50,13 @@ MEMORY_GRID = [0.25, 0.5, 1.0, 2.0, 4.0]
 PAIRS = {9: 0.5, 18: 1, 27: 1.5, 36: 2, 54: 3, 72: 4, 108: 6}
 
 
+# read one JSON record
 def load(path):
     return json.loads(Path(path).read_text())
 
 
+# Path relative to the package root when it lies inside it, absolute otherwise.
 def rel(path):
-    """Path relative to the package root when it lies inside it."""
     path = Path(path).resolve()
     try:
         return str(path.relative_to(ROOT.resolve()))
@@ -63,40 +64,42 @@ def rel(path):
         return str(path)
 
 
+# First time c(t) falls below 1/e, linearly interpolated between samples.
 def efold(t, c):
-    """First time c(t) falls below 1/e (linear interpolation)."""
     k = int(np.flatnonzero(np.asarray(c) < np.exp(-1))[0])
     return float(t[k - 1] + (c[k - 1] - np.exp(-1)) / (c[k - 1] - c[k]) * (t[k] - t[k - 1]))
 
 
+# y at x by linear interpolation in log t; the curves are stored on log-spaced lags.
 def at(t, y, x):
-    """y(x) by linear interpolation in log t (curves are stored on log-spaced lags)."""
     return np.interp(np.log(x), np.log(t), y)
 
 
+# Exponential time of the remaining memory g(t), fitted where 0.1 < g < 0.9.
 def fit_memory(t, g):
-    """Exponential time of g(t) fitted where 0.1 < g < 0.9."""
     t, g = np.asarray(t), np.asarray(g)
     sel = (g > 0.1) & (g < 0.9)
     return float(-1 / np.polyfit(t[sel], np.log(g[sel]), 1)[0])
 
 
+# a / b for two [value, error] pairs, relative errors added in quadrature.
 def ratio(a, b):
-    """a / b for two [value, error] pairs, relative errors added in quadrature."""
     r = a[0] / b[0]
     return [float(r), float(r * np.hypot((a[1] or 0) / a[0], (b[1] or 0) / b[0]))]
 
 
+# tau(I) cosh(I) / tau(0) with its error; tau, tau0 and i are [value, error] pairs.
+# Equal to 1 when the telegraph cosh law holds.
 def cosh_ratio(tau, tau0, i):
-    """tau(I) cosh(I) / tau(0) with its error; tau, tau0, i are [value, error]."""
     r = tau[0] * np.cosh(i[0]) / tau0[0]
     rel = [(tau[1] or 0) / tau[0], (tau0[1] or 0) / tau0[0], np.tanh(i[0]) * (i[1] or 0)]
     return [float(r), float(r * np.sqrt(sum(x * x for x in rel)))]
 
 
 # ------------------------------------------------------------------ trace
+# Cut a window of `length` ns of m_z(t) of one disk out of a packed mumax3 run and save
+# it as results/validation/mumax_trace.npz (float16 m_z, times in ns).
 def trace(run, disk=0, t0=0.0, length=150.0):
-    """Save m_z(t) of one disk of a packed mumax3 run (float16, ns)."""
     z = np.load(run)
     t = z["t"] * 1e9
     keep = (t >= t0) & (t <= t0 + length)
@@ -107,8 +110,9 @@ def trace(run, disk=0, t0=0.0, length=150.0):
 
 
 # ------------------------------------------------------------------ build
+# The mumax3 disk on the common axes: static numbers, tau against I, the time-step
+# checks, the read autocorrelation at 0 and 18 mT, and the field steps.
 def mumax_part(mm_dir):
-    """mumax3 disk on the common axes."""
     eq = load(mm_dir / "device_p_equilibrium.json")
     curves = np.load(mm_dir / "device_p_curves.npz")
     checks = load(mm_dir / "checks.json")
@@ -175,8 +179,8 @@ def mumax_part(mm_dir):
     return out
 
 
+# The matched macrospin on the same axes, from its device records.
 def macrospin_part(ms_dir):
-    """sLLG macrospin on the common axes."""
     dev = load(ms_dir / "device.json")
     z = load(ms_dir / "device_bias_I+0.json")
     t0 = z["acf"]["tau_1e_s"]
@@ -222,8 +226,8 @@ def macrospin_part(ms_dir):
     return out
 
 
+# Side-by-side rows of the two devices and the telegraph model, matched by field.
 def compare(mm, ms):
-    """Side-by-side rows of the two devices and the telegraph model."""
     rows = {"static": {
         "barrier_kT": [mm["barrier_kT"], ms["barrier_kT"]],
         "slope_per_mT": [mm["slope_per_mT"], ms["slope_per_mT"]],
@@ -288,6 +292,7 @@ def compare(mm, ms):
     return rows
 
 
+# Build results/validation/NAME.json from the two record directories.
 def build(mm_dir=MUMAX, ms_dir=SLLG, name="validation"):
     mm, ms = mumax_part(Path(mm_dir)), macrospin_part(Path(ms_dir))
     rec = {"note": "times in units of each device's own 1/e correlation time at zero bias; "
@@ -303,12 +308,14 @@ def build(mm_dir=MUMAX, ms_dir=SLLG, name="validation"):
 
 
 # ------------------------------------------------------------------- draw
+# Centre and half-width of the I estimates of a step whose I was not measured
+# (the lower bound from the largest measured I is left out).
 def extrapolation_span(step):
-    """Centre and half-width of the I estimates of a step (the lower bound is left out)."""
     v = [x for k, x in step["I_options"].items() if k != "largest_measured"]
     return (max(v) + min(v)) / 2, (max(v) - min(v)) / 2
 
 
+# Draw Fig. 1 from results/validation/NAME.json and the stored m_z trace.
 def draw(pdf, name="validation"):
     import matplotlib
     matplotlib.use("Agg")

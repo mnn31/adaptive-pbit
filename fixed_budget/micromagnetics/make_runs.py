@@ -45,13 +45,15 @@ STT_CURRENTS = (1.4e10, 2.4e10)   # A/m^2, chosen from the 50 fs probe (I near 1
 BURN = 20 * NS           # discarded at the start of every equilibrium run
 
 
+# Initial up-probability of each disk at a field in mT, near the expected
+# equilibrium, so the burn-in can be short.
 def p_init(b_mt):
-    """Initial up-probability near the expected equilibrium, so burn-in is short."""
     return 0.5 * (1 + np.tanh(SLOPE_PILOT * b_mt))
 
 
+# Spin-torque bias runs: a Slonczewski current (A/m^2) through a +z fixed layer,
+# no field. Yields one job per current and seed.
 def stt_jobs(currents, length=150, seeds=2, set_name="stt", seed=5000):
-    """Spin-torque bias runs: Slonczewski current through a +z fixed layer, no field."""
     for j in currents:
         for k in range(seeds):
             seed += 1
@@ -60,8 +62,9 @@ def stt_jobs(currents, length=150, seeds=2, set_name="stt", seed=5000):
                    {"stt_j": j, "bz_mT": 0, "burn_ns": BURN / NS})
 
 
+# Every job of the main study at 50 fs, as (name, set, script kwargs, metadata).
+# New runs are appended at the end so the seeds of earlier runs never change.
 def jobs():
-    """Yield (name, set, script kwargs, extra metadata) for the whole study."""
     yield from stt_jobs((1e10, 3e10), length=60, seeds=1, set_name="sttprobe", seed=4000)
     seed = 1000
     # Device P equilibrium runs: field in mT -> (seeds, run length after burn-in, ns).
@@ -154,8 +157,8 @@ def jobs():
                    {"bz_mT": b, "burn_ns": BURN / NS})
 
 
+# Keep the jobs of the named sets, with a new time step (s) and shifted seeds.
 def rerun(todo, sets, dt=None, seed_offset=0):
-    """Keep the jobs of the named sets, with a new time step and shifted seeds."""
     for name, group, kw, meta in todo:
         if sets and group not in sets:
             continue
@@ -163,8 +166,9 @@ def rerun(todo, sets, dt=None, seed_offset=0):
         yield name, group, kw, meta
 
 
+# Runs added at 25 fs after the production rerun; seeds from 20001, distinct from
+# all others.
 def extra_jobs():
-    """Runs added at 25 fs after the production rerun (seeds from 20001, distinct from all others)."""
     seed = 20000
     # More seeds where the production set had few seeds or few minority visits.
     for b, first, n in ((-9, 2, 2), (-27, 2, 2), (-36, 2, 2), (54, 4, 4), (72, 4, 4)):
@@ -183,8 +187,8 @@ def extra_jobs():
                {"bx_mT": 0, "burn_ns": 2.0})
 
 
+# 25 fs repeats of the controls and more seeds of two checks; seeds from 30001.
 def control_jobs():
-    """25 fs repeats of the controls, and more seeds of two checks (seeds from 30001)."""
     # Spin-torque bias: the currents of the 50 fs runs, four seeds each.
     for name, group, kw, meta in stt_jobs(STT_CURRENTS, seeds=4, seed=30000):
         yield name, group, dict(kw, dt=25e-15), meta
@@ -214,8 +218,9 @@ def control_jobs():
                {"bz_mT": 0, "burn_ns": BURN / NS})
 
 
+# Current steps at 25 fs: equilibrium runs at +j, then a square wave of the current
+# between -j and +j (half period in ns).
 def stt_step_jobs(j, seeds=2, half=15, periods=4):
-    """Current steps at 25 fs: equilibrium runs at +j, then a square wave between -j and +j."""
     for name, group, kw, meta in stt_jobs((j,), seeds=4, seed=40000):
         yield name, group, dict(kw, dt=25e-15), meta
     for k in range(seeds):
@@ -235,16 +240,18 @@ MESH = {"nx": 8, "ny": 8, "cell": 1e-9, "pitch": 48, "dt": 6.25e-15}
 MESH_BURN = 2 * NS       # disks start in a well, so only in-well motion has to relax
 
 
+# One short zero-field run per Ku (J/m^3) with 1 nm cells, to find the Ku that
+# gives the 2 nm barrier.
 def mesh_cal_jobs(kus, length=28):
-    """One short zero-field run per anisotropy constant, to find Ku for the 2 nm barrier."""
     for n, ku in enumerate(kus):
         yield (f"meshcal_ku{ku / 1e3:.0f}", "mesh",
                dict(MESH, seed=50001 + n, ku=ku, schedule=[(0.0, MESH_BURN + length * NS)]),
                {"bz_mT": 0, "burn_ns": MESH_BURN / NS})
 
 
+# Mesh check at one Ku: zero field, I near 1 (18 mT), and steps between -72 and
+# +72 mT.
 def mesh_jobs(ku):
-    """Mesh check at one Ku: zero field, I near 1, and steps between -72 and +72 mT."""
     seed = 51000
     for b, n, length in ((0, 3, 50), (18, 1, 50)):
         for k in range(n):
@@ -262,6 +269,8 @@ def mesh_jobs(ku):
                 "burn_ns": MESH_BURN / NS})
 
 
+# Write the .mx3 script and the parameter .json of every job in OUTDIR, and jobs.txt
+# with the longest jobs first.
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("outdir")
@@ -303,6 +312,7 @@ def main():
                     schedule=[list(seg) for seg in kw["schedule"]])
         meta.setdefault("dt", dt)
         (out / f"{name}.json").write_text(json.dumps(meta, indent=1))
+        # cost in 50 fs-equivalent ns, used only to order the queue
         rows.append((sim_ns * 50e-15 / dt, name))
     rows.sort(reverse=True)
     (out / "jobs.txt").write_text("".join(f"{n}.mx3\n" for _, n in rows))

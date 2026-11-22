@@ -138,25 +138,27 @@ LAW_KINDS = [f"tlaw_{k}" for k in LAW_STEPS]
 _DATA = {}
 
 
+# Path relative to the repo when inside it, absolute otherwise (for the records).
 def rel(path):
-    """Path relative to the repo when inside it, absolute otherwise."""
     path = Path(path).resolve()
     return str(path.relative_to(ROOT) if path.is_relative_to(ROOT) else path)
 
 
+# MNIST splits, loaded once per process
 def data():
     if "mnist" not in _DATA:
         _DATA["mnist"] = splits("mnist")
     return _DATA["mnist"]
 
 
+# Unscored warm-up images per lane in streaming mode, same rule as
+# run_v2.lane_params.
 def warmup(n, r0):
-    """Unscored warm-up images per lane: run_v2.lane_params' rule."""
     return int(min(100, max(10, np.ceil(6.0 / (n * r0)))))
 
 
+# Checkpoint file of a network name (names are listed in the module docstring).
 def net_path(net):
-    """Checkpoint of a network name (see the module docstring)."""
     if net == "ideal":
         return ROOT / "results" / "v2_mnist_seed0.pt"
     m = re.fullmatch(r"(m?)na([\d.]+)(?:s(\d))?", net)
@@ -166,6 +168,7 @@ def net_path(net):
     return ROOT / "results" / f"v2_mnist_na{tr0}_seed{seed}.pt"
 
 
+# the macrospin and its device.json record from the current device directory
 def device_record():
     rec = json.loads((DEV / "device.json").read_text())
     d = rec["device"]
@@ -173,8 +176,9 @@ def device_record():
     return dev, rec
 
 
+# Telegraph rate caps: tau_c(0) over the macrospin's 1/e time after each field
+# reversal in CAP_STEPS.
 def rate_caps():
-    """tau_c(0) / (1/e time after a field reversal), for each CAP_STEPS row."""
     rec = json.loads((DEV / "device_step.json").read_text())
     out = {}
     for key, (a, b) in CAP_STEPS.items():
@@ -185,6 +189,8 @@ def rate_caps():
     return out
 
 
+# Tabulated telegraph rate laws from the macrospin's step responses, one per
+# LAW_STEPS set (see the docstring for how the grid is placed).
 def rate_laws():
     """Measured rate growth against the nominal input, for each LAW_STEPS set.
 
@@ -207,22 +213,26 @@ def rate_laws():
     return out
 
 
+# source name used in record file names; capped runs carry their cap
 def kind_label(kind, cap):
     return f"tcap{cap:.4g}" if kind == "tcap" else kind
 
 
+# telegraph and ideal runs of shared networks are device-independent and shared
 def record_dir(kind, net):
     if kind in ("telegraph", "ideal") and not net.startswith("m"):
         return SHARED
     return DEV / "clf"
 
 
+# record file name of one run
 def name(kind, net, mode, r0, n, kappa, ns, tag="", cap=None):
     k = "" if kappa == SETTLE else f"_k{kappa:g}"
     return (f"{kind_label(kind, cap)}{tag}_{net}_{mode}_r{r0:g}_T{n}{k}"
             f"_ns{ns}.json")
 
 
+# code hashes and time, stamped into every record
 def provenance():
     files = [Path(sllg.__file__), Path(__file__)]
     return {"code_sha256": {f.name: hashlib.sha256(f.read_bytes())
@@ -230,6 +240,8 @@ def provenance():
             "time": time.strftime("%Y-%m-%d %H:%M:%S")}
 
 
+# One classifier evaluation: build the source for `kind`, run the lane protocol on
+# the full test set and write one JSON record. Returns the stored record if it exists.
 def run_one(kind, net, mode, r0, n, kappa, ns, gpu="cpu", dt=1e-12, tag="",
             cap=None):
     path = record_dir(kind, net) / name(kind, net, mode, r0, n, kappa, ns,
@@ -244,6 +256,7 @@ def run_one(kind, net, mode, r0, n, kappa, ns, gpu="cpu", dt=1e-12, tag="",
     trx, _, _, _, tx, ty = data()
     model = load_checkpoint(net_path(net))
     stream = mode == "stream"
+    # only sources with memory need warm-up images in streaming mode
     warm = warmup(n, r0) if stream and kind in ("telegraph", "tcap", "sllg",
                                                 *LAW_KINDS) else 0
     law = rate_laws()[kind[5:]] if kind in LAW_KINDS else None
@@ -283,10 +296,12 @@ def run_one(kind, net, mode, r0, n, kappa, ns, gpu="cpu", dt=1e-12, tag="",
     return rec
 
 
+# unpack a job tuple for Pool.map
 def _job(args):
     return run_one(*args[:7], cap=args[7])
 
 
+# the (net, mode, r0, N, kappa) points of the chosen groups, without repeats
 def points(groups, nets=None):
     pts = []
     for g in groups:
@@ -294,6 +309,8 @@ def points(groups, nets=None):
     return list(dict.fromkeys(pts))
 
 
+# All CPU sources (telegraph, capped and tabulated-law telegraph, equilibrium,
+# ideal), run in a process pool.
 def part_cpu(kind, groups, nets, seeds, workers):
     if kind in ("ideal", "equilibrium"):
         # stateless sources: protocol and r0 do not matter, N does
@@ -317,11 +334,13 @@ def part_cpu(kind, groups, nets, seeds, workers):
         pool.map(_job, jobs, chunksize=1)
 
 
+# device time per image in units of tau_c(0): settle plus reads, or N reads in streaming
 def cost(p):
     _, mode, r0, n, kappa = p
     return (kappa + (n - 1) * r0) if mode == "settle" else n * r0
 
 
+# Noise seeds to run for one macrospin point; the expensive points get only one.
 def sllg_seeds(p, seeds):
     """Noise seeds for a macrospin run.
 
@@ -334,6 +353,7 @@ def sllg_seeds(p, seeds):
     return seeds
 
 
+# Macrospin runs on the GPU, cheapest points first so partial runs are useful.
 def part_sllg(gpu, groups, nets, seeds, max_cost=np.inf):
     for p in sorted(points(groups, nets), key=cost):
         if cost(p) > max_cost:
@@ -342,14 +362,16 @@ def part_sllg(gpu, groups, nets, seeds, max_cost=np.inf):
             run_one("sllg", *p, ns, gpu=gpu)
 
 
+# Repeat a few macrospin points at dt = 0.5 ps to check the 1 ps step.
 def part_dtcheck(gpu):
     for p in DT_CHECK:
         for ns in SEEDS:
             run_one("sllg", *p, ns, gpu=gpu, dt=0.5e-12, tag="dt0.5ps")
 
 
+# Pre-activation statistics of the hidden layers and the device P(+) against
+# tanh; writes classifier_inputs.json.
 def part_inputs():
-    """Hidden pre-activation statistics and P(+) of the device against tanh."""
     dev, drec = device_record()
     tpi = drec["tesla_per_unit_i"]
     i_single_well = dev.b_anis / tpi   # Bz above B_anis: no minority well
@@ -387,14 +409,16 @@ def part_inputs():
 
 
 # ------------------------------------------------------------------ table
+# accuracy list -> mean, SD and count, in percent
 def _stats(accs):
     a = 100 * np.array(accs)
     return {"mean": float(a.mean()), "sd": float(a.std(ddof=1))
             if a.size > 1 else None, "n": int(a.size)}
 
 
+# Accuracy at this point in the earlier telegraph records (results/v2, 100 or
+# 200 lanes), or None.
 def _paper(net, mode, r0, n, kappa):
-    """The paper's own records at this point (its lanes, 100 or 200)."""
     m = re.fullmatch(r"na([\d.]+)(?:s(\d))?", net)
     if net.startswith("m"):
         return None
@@ -410,8 +434,8 @@ def _paper(net, mode, r0, n, kappa):
     return _stats(accs) if accs else None
 
 
+# Mean and SD over every noise seed on record for this point.
 def _load(kind, p, tag="", cap=None):
-    """Mean and SD over every noise seed on record for this point."""
     accs = []
     for ns in range(MAX_SEEDS):
         f = record_dir(kind, p[0]) / name(kind, *p, ns, tag, cap)
@@ -420,6 +444,7 @@ def _load(kind, p, tag="", cap=None):
     return _stats(accs) if accs else None
 
 
+# r0 at which accuracy first reaches `level`, with a range from the seed spread.
 def crossing(r0s, rows, level=90.0):
     """r0 where accuracy first rises through `level` (linear in log r0).
 
@@ -433,6 +458,7 @@ def crossing(r0s, rows, level=90.0):
     mean = np.array([rows[k]["mean"] for k in order])
     sd = np.array([rows[k]["sd"] or 0.0 for k in order])
 
+    # interpolate between the last grid point below level and the first one above
     def cross(acc, log=True):
         above = np.nonzero(acc >= level)[0]
         if above.size == 0 or above[0] == 0:
@@ -454,6 +480,7 @@ def crossing(r0s, rows, level=90.0):
             "acc_at_bracket": [float(mean[j - 1]), float(mean[j])]}
 
 
+# Trained-on x tested-on table for the transfer group.
 def transfer_summary(rows):
     """Trained-on x tested-on accuracies, mean and SD over training seeds.
 
@@ -482,6 +509,7 @@ def transfer_summary(rows):
     return out
 
 
+# How much of the telegraph-to-macrospin accuracy gap each diagnostic closes.
 def gap_closed(rows, cols, min_gap=2.0):
     """Share of the telegraph-to-macrospin gap that each diagnostic closes.
 
@@ -496,6 +524,7 @@ def gap_closed(rows, cols, min_gap=2.0):
                 or not (r.get("sllg") and r.get("telegraph"))):
             continue
         gap = r["telegraph"]["mean"] - r["sllg"]["mean"]
+        # small gaps make the share too noisy to read
         if gap < min_gap:
             continue
         shares = {c: (r["telegraph"]["mean"] - r[c]["mean"]) / gap
@@ -510,14 +539,15 @@ def gap_closed(rows, cols, min_gap=2.0):
     return sorted(out, key=lambda g: (g["T"], g["r0"]))
 
 
+# values already in percent -> mean, SD and number of training seeds
 def _stats_pct(values):
     a = np.array(values)
     return {"mean": float(a.mean()), "sd": float(a.std(ddof=1))
             if a.size > 1 else None, "n_training_seeds": int(a.size)}
 
 
+# Cells the matched record set should hold but does not.
 def missing_cells(rows, caps, laws):
-    """Cells the matched record set should hold but does not."""
     need = {"sllg": set(GROUPS) - {"legacy"},
             "telegraph": set(GROUPS) - {"legacy"},
             **{f"tcap_{k}": {"cap", "stream", "crossing"} for k in caps},
@@ -541,6 +571,8 @@ def missing_cells(rows, caps, laws):
     return out
 
 
+# Collect every record into classifier_table.json and .csv, with the 90%
+# crossings, the gap shares and the transfer table; --strict fails on missing cells.
 def part_table(strict=False):
     have_step = (DEV / "device_step.json").exists()
     caps = rate_caps() if have_step else {}

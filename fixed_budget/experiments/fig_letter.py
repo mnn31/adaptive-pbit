@@ -48,6 +48,7 @@ plt.rcParams.update({
 R0LAB = r"Sampling ratio, $r_0=\Delta t/\tau_{\mathrm{corr}}(0)$"
 
 
+# all results/v2 records of one experiment prefix whose fields match the filters
 def rows(prefix, **f):
     out = []
     for p in V2.glob(prefix + "_*.json"):
@@ -57,6 +58,7 @@ def rows(prefix, **f):
     return out
 
 
+# group records by `keys` -> (mean accuracy, SD over seeds, count), as fractions
 def agg(rs, keys):
     d = defaultdict(list)
     for r in rs:
@@ -64,11 +66,13 @@ def agg(rs, keys):
     return {k: (np.mean(v), np.std(v), len(v)) for k, v in d.items()}
 
 
+# panel letter (a), (b) at the top left of an axis
 def panel(ax, s):
     ax.text(-0.18, 1.04, s, transform=ax.transAxes, fontsize=9,
             fontweight="bold", va="bottom")
 
 
+# write the figure as OUT/name.pdf with the date and producer fields left empty
 def save(fig, name):
     OUT.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT / f"{name}.pdf", bbox_inches="tight",
@@ -77,8 +81,9 @@ def save(fig, name):
     plt.close(fig)
 
 
+# Macrospin accuracies of one network, mode and N from the classifier table, as
+# (r0, mean, sd) in percent sorted by r0. The dt check rows are left out.
 def macro_rows(net, mode, n, settle=SETTLE):
-    """Macrospin accuracy (r0, mean, sd in %) of one network, mode and N."""
     table = json.loads(MACRO.read_text())
     pts = {}
     for r in table["rows"]:
@@ -89,8 +94,9 @@ def macro_rows(net, mode, n, settle=SETTLE):
     return [(r0, *pts[r0]) for r0 in sorted(pts)]
 
 
+# Transfer-table accuracies at N reads: r0 -> (mean, sd) in percent, for networks
+# trained on one source and tested on another.
 def macro_transfer(trained_on, train_r0, tested_on, n=32):
-    """Correlation-aware networks in table transfer_2x2: r0 -> (mean, sd) in %."""
     table = json.loads(MACRO.read_text())
     return {t["r0"]: (t[f"tested_on_{tested_on}"]["mean"],
                       t[f"tested_on_{tested_on}"]["sd"])
@@ -100,6 +106,8 @@ def macro_transfer(trained_on, train_r0, tested_on, n=32):
 
 
 # ---------------------------------------------------------------- Fig. 2
+# Fig. 2: accuracy against r0 in settle mode (a) and streaming mode (b) for N = 1, 8,
+# 32, with the macrospin points and the bias-independent control on top.
 def fig2():
     e2 = agg(rows("e2", ds="mnist"), ["mode", "r0", "T"])
     e1 = agg(rows("e1", ds="mnist", model_seed=0), ["T"])
@@ -154,6 +162,7 @@ def fig2():
 
 
 # ------------------------------------------- dispersion (not in the letter)
+# Accuracy against device-to-device barrier spread at four r0 (not a letter figure).
 def dispersion():
     e3 = agg(rows("e3", ds="mnist"), ["centering", "r0", "sigma_delta"])
     sds = [0.0, 0.25, 0.5, 1.0, 1.5]
@@ -182,6 +191,7 @@ def dispersion():
 
 
 # ---------------------------------------------------------------- Fig. 3
+# For each evaluation (r0, N), the training r0 that does best on the validation split.
 def e4_selection():
     val = agg(rows("e4", ds="mnist", split="val"), ["train_r0", "eval_r0", "T"])
     test = agg(rows("e4", ds="mnist", split="test"), ["train_r0", "eval_r0", "T"])
@@ -192,6 +202,8 @@ def e4_selection():
     return sel, test
 
 
+# Fig. 3: (a) correlation-aware training, evaluated on telegraph and on macrospin
+# neurons; (b) accuracy against throughput with the frontier over every setting.
 def fig3():
     test = agg(rows("e4", ds="mnist", split="test"), ["train_r0", "eval_r0", "T"])
     base = agg(rows("e2", ds="mnist", mode="stream"), ["r0", "T"])
@@ -244,6 +256,7 @@ def fig3():
 
     e2 = agg(rows("e2", ds="mnist"), ["mode", "r0", "T"])
     sel, _ = e4_selection()
+    # throughput = 1 / device time per input: settle plus N - 1 reads, or N reads
     pts = [((1.0 / ((T - 1) * r0 + SETTLE) if m == "settle" else 1.0 / (T * r0)),
             v[0], m) for (m, r0, T), v in e2.items()]
     na = [(1.0 / (T * er), test[(tr, er, T)][0], "na")
@@ -256,6 +269,7 @@ def fig3():
                    marker=mk, color=col, alpha=0.6, label=lab)
     ax.scatter([q[0] for q in na], [100 * q[1] for q in na], s=10, marker="s",
                color="#D55E00", alpha=0.9, label="correlation-aware")
+    # frontier: walking from fast to slow, keep each point that beats every faster one
     allp = sorted(pts + na, key=lambda q: -q[0])
     front, best = [], -1
     for q in allp:

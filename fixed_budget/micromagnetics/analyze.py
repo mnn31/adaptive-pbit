@@ -54,8 +54,8 @@ EQ_SETS = ("eq", "dt25", "dt12")
 WORKERS = min(32, os.cpu_count() or 1)
 
 
+# Seed mean and standard error (nan-safe; SE is nan for a single seed).
 def mean_se(values):
-    """Seed mean and standard error (nan-safe; SE is nan for a single seed)."""
     v = np.asarray([x for x in values if np.isfinite(x)], dtype=np.float64)
     if len(v) == 0:
         return [np.nan, np.nan]
@@ -63,13 +63,14 @@ def mean_se(values):
     return [float(v.mean()), float(se)]
 
 
+# Parameters of a job, given its path without extension.
 def meta_of(stem):
-    """Parameters of a job, given its path without extension."""
     return json.loads(Path(f"{stem}.json").read_text())
 
 
+# Packed run -> (metadata, time step of the table in ns, times, magnetization after
+# burn-in).
 def load(stem):
-    """Packed run -> (metadata, time step of the table in ns, times, magnetization after burn-in)."""
     meta = meta_of(stem)
     z = np.load(f"{stem}.npz")
     t = z["t"] * 1e9
@@ -79,8 +80,8 @@ def load(stem):
     return meta, dt, t[keep] - meta["burn_ns"], m[keep]
 
 
+# Mean equal-time correlation of reads between nearest-neighbour disks.
 def neighbour_corr(s, nx, ny):
-    """Mean equal-time correlation of reads between nearest-neighbour disks."""
     x = s.astype(np.float64)
     x = (x - x.mean(0)) / (x.std(0) + 1e-12)
     grid = x.reshape(len(x), nx, ny)
@@ -88,8 +89,8 @@ def neighbour_corr(s, nx, ny):
     return float(np.mean([(a * b).mean() for a, b in pairs]))
 
 
+# 95th percentile of a null sample and the fraction of it at or above d (nan-safe).
 def null_stats(null, d):
-    """95th percentile of a null sample and the fraction of it at or above d (nan-safe)."""
     null = np.asarray(null, dtype=np.float64)
     null = null[np.isfinite(null)]
     if len(null) < 20 or not np.isfinite(d):
@@ -97,8 +98,9 @@ def null_stats(null, d):
     return float(np.quantile(null, 0.95)), float(np.mean(null >= d))
 
 
+# Escape rate from every run, and the shape of the whole dwells (those begun inside the
+# window).
 def dwell_stats(durations, censored, first):
-    """Escape rate from every run, and the shape of the whole dwells (those begun inside the window)."""
     rate = float(ms.exp_rate_mle(durations, censored))
     d, c = durations[~first], censored[~first]
     done = d[~c]
@@ -110,8 +112,9 @@ def dwell_stats(durations, censored, first):
             "short_excess": ms.short_dwell_excess(d, c, rate)}
 
 
+# Dwell statistics of a +-1 series per state, with the same statistics of a telegraph
+# null.
 def dwell_block(s, dt, rng, null=True):
-    """Dwell statistics of a +-1 series per state, with the same statistics of a telegraph null."""
     dw = ms.dwell_times(s, dt)
     out = {key: dwell_stats(*dw[st]) for st, key in ((1, "up"), (-1, "down"))}
     if null and out["up"]["n_dwells"] > 20 and out["down"]["n_dwells"] > 20:
@@ -132,8 +135,8 @@ def dwell_block(s, dt, rng, null=True):
     return out
 
 
+# All single-seed statistics of a two-state (m_z) run.
 def seed_record(meta, dt, m, rng, max_lag_ns=90.0):
-    """All single-seed statistics of a two-state (m_z) run."""
     s = ms.sign_reads(m)
     max_lag = min(round(max_lag_ns / dt), len(s) // 2)
     c = ms.autocorr(s, max_lag)
@@ -166,8 +169,8 @@ def seed_record(meta, dt, m, rng, max_lag_ns=90.0):
     return rec, s, curves
 
 
+# Seed means and errors of the scalar fields of a list of seed records.
 def aggregate(recs):
-    """Seed means and errors of the scalar fields of a list of seed records."""
     out = {}
     for key in ("p_up", "I", "minority_frac", "mean_abs_m", "barrier_kT", "well_minus_kT",
                 "well_plus_kT", "saddle_m", "frac_abs_below_0p3", "tau_efold",
@@ -199,6 +202,8 @@ def aggregate(recs):
     return out
 
 
+# Stale-read probabilities on the r0 grid, measured per seed and predicted by the
+# telegraph propagator for each correlation time in `taus`.
 def stale_block(series, dt, p, tau0, taus):
     """Stale-read probabilities at the r0 grid, measured and from the telegraph propagator.
 
@@ -233,6 +238,7 @@ def stale_block(series, dt, p, tau0, taus):
     return rows
 
 
+# Input I to use at field b (mT): measured, mirrored from -b, or from the field fit.
 def model_I(points, fit, b):
     """Input I of the telegraph model at field b (mT), with a note of where it comes from.
 
@@ -245,15 +251,16 @@ def model_I(points, fit, b):
     return fit["slope_per_mT"][0] * b + fit["intercept"][0], "field_fit"
 
 
+# Reduce one run; the dwell-test null is drawn from the run's own seed, so results are
+# reproducible.
 def seed_job(stem):
-    """Reduce one run; the dwell-test null is drawn from the run's own seed, so results are reproducible."""
     meta, dt, _, m = load(stem)
     rec, s, c = seed_record(meta, dt, m, np.random.default_rng(meta["seed"]))
     return meta, dt, rec, s, c
 
 
+# Group runs by bias and reduce each group; returns (points, curves, seed series).
 def two_state_set(stems):
-    """Group runs by bias and reduce each group; returns (points, curves, seed series)."""
     groups = {}
     for stem in stems:
         meta = meta_of(stem)
@@ -278,13 +285,13 @@ def two_state_set(stems):
     return points, curves, series
 
 
+# Finished jobs whose name starts with prefix, as paths without extension.
 def done_stems(rundirs, prefix):
-    """Finished jobs whose name starts with prefix, as paths without extension."""
     return sorted(p.parent / p.name[:-5] for d in rundirs for p in d.glob(f"{prefix}*.done"))
 
 
+# Finished jobs of the given sets, grouped by time step in fs.
 def by_time_step(rundirs, sets):
-    """Finished jobs of the given sets, grouped by time step in fs."""
     out = {}
     for stem in done_stems(rundirs, ""):
         meta = meta_of(stem)
@@ -293,13 +300,14 @@ def by_time_step(rundirs, sets):
     return out
 
 
+# Points without their per-seed records.
 def strip(points):
-    """Points without their per-seed records."""
     return {k: {f: v for f, v in pt.items() if f != "seed_records"} for k, pt in points.items()}
 
 
+# At biases holding both, the production rerun (eq_ runs) against the earlier 25 fs
+# check (dt25_ runs).
 def rerun_vs_check(points):
-    """At biases holding both, the production rerun (eq_ runs) against the earlier 25 fs check (dt25_ runs)."""
     out = {}
     for k, pt in points.items():
         recs = {pre: [r for r in pt["seed_records"] if r["name"].startswith(pre)]
@@ -313,8 +321,8 @@ def rerun_vs_check(points):
     return out
 
 
+# Least-squares fit of i to the given powers of b: coefficients and their covariance.
 def power_fit(b, i, powers):
-    """Least-squares fit of i to the given powers of b: coefficients and their covariance."""
     a = np.stack([b ** p for p in powers], axis=1)
     coef = np.linalg.lstsq(a, i, rcond=None)[0]
     resid = i - a @ coef
@@ -322,8 +330,9 @@ def power_fit(b, i, powers):
     return {"powers": list(powers), "coef": coef.tolist(), "cov": cov.tolist()}
 
 
+# [I, error] at field b (mT) under each map of field_fit; largest_measured bounds abs(I)
+# from below.
 def extrapolated_I(maps, b):
-    """[I, error] at field b (mT) under each map of field_fit; largest_measured bounds abs(I) from below."""
     out = {}
     for label, m in maps.items():
         if label == "largest_measured":
@@ -334,6 +343,8 @@ def extrapolated_I(maps, b):
     return out
 
 
+# Field-to-I map: the linear fit used for every model comparison, its curvature
+# test, and I at the fields where it was not measured.
 def field_fit(points):
     """Fit I against B_z over abs(I) <= 2 (ordinary least squares, errors from the residuals).
 
@@ -375,25 +386,27 @@ def field_fit(points):
             "I_all": [[float(x), float(y), float(z)] for x, y, z in zip(b, i, e)]}
 
 
+# tau(I) cosh(I) / tau(0) with its error; all three arguments are [value, error] pairs.
 def cosh_ratio(tau, tau0, i):
-    """tau(I) cosh(I) / tau(0) with its error; all three arguments are [value, error] pairs."""
     r = ratio(tau, tau0)
     # Error of cosh I from the error of I: d(cosh I) / cosh I = tanh(I) dI.
     i_se = i[1] if np.isfinite(i[1]) else 0.0
     return [r[0] * np.cosh(i[0]), np.cosh(i[0]) * np.hypot(r[1], r[0] * np.tanh(i[0]) * i_se)]
 
 
+# One row per bias point comparing the measured correlation times with the model laws.
 def tau_vs_I(points, ref, delta, fit=None):
     """Measured tau_c(I) against the Arrhenius (cosh), bias-independent and macrospin predictions.
 
     ref is the zero-bias point. The pred_* columns scale its 1/e time; each
     *_over_cosh ratio is tau(I) cosh(I) / tau(0) with both times from the same
     estimator, so 1 means the cosh law holds for that estimator.
-    few_flips marks points where the 1/e time is set by in-well motion of a
-    single-state read and is not a switching time. With a field fit, I comes
-    from model_I; without one (current bias) it is the measured logit. The
-    ratio errors carry the error of I where I is measured or mirrored; a
-    field-fit I is an extrapolation with no usable error, and none is added.
+    few_flips marks points where the read is nearly single-state and its
+    1/e time is set by brief excursions across m_z = 0, not by switching.
+    With a field fit, I comes from model_I; without one (current bias) it is
+    the measured logit. The ratio errors carry the error of I where I is
+    measured or mirrored; a field-fit I is an extrapolation with no usable
+    error, and none is added.
     """
     tau0 = ref["tau_efold"][0]
     rows = []
@@ -420,13 +433,14 @@ def tau_vs_I(points, ref, delta, fit=None):
     return rows
 
 
+# Bootstrap standard error (nan-safe spread of the resampled values).
 def boot_se(values):
-    """Bootstrap standard error (nan-safe spread of the resampled values)."""
     v = np.asarray(values, dtype=np.float64)
     v = v[np.isfinite(v)]
     return float(v.std(ddof=1)) if len(v) > 1 else np.nan
 
 
+# Step-response record of one set of disk-steps, with bootstrap errors.
 def step_record(units, dt, s_eq, tau0, tau_pred, rng):
     """Relaxation of the ensemble read mean after a field step, for three asymptotes.
 
@@ -441,6 +455,7 @@ def step_record(units, dt, s_eq, tau0, tau_pred, rng):
     n, length = units.shape
     tail = slice(length - length // 5, length)
 
+    # all numbers of one read-mean curve, for the measured curve and for each resample
     def reduce(curve, s_inf_eq):
         s0, s_tail = curve[0], curve[tail].mean()
         tau_free, s_free = ms.step_fit_free(curve, dt)
@@ -466,6 +481,7 @@ def step_record(units, dt, s_eq, tau0, tau_pred, rng):
     eq_draws = s_eq[0] + (s_eq[1] if np.isfinite(s_eq[1]) else 0.0) * rng.standard_normal(N_BOOT)
     boots = [reduce(c, e) for c, e in zip(curves, eq_draws)]
 
+    # [value on the full sample, bootstrap SE]
     def pair(key):
         return [float(best[key]), boot_se([b.get(key, np.nan) for b in boots])]
 
@@ -490,6 +506,7 @@ def step_record(units, dt, s_eq, tau0, tau_pred, rng):
     return rec, np.stack([np.arange(length) * dt, curve, se])
 
 
+# Slowdown of the step against the cosh law, for each estimate of I.
 def step_over_cosh(rec, tau0, i_options):
     """Step time over the cosh-law time, tau_step cosh(I) / tau_c(0), for each I in i_options.
 
@@ -501,8 +518,8 @@ def step_over_cosh(rec, tau0, i_options):
             for kind in ("eq_asymptote", "free")}
 
 
+# Step responses grouped by (low field, high field, half period).
 def step_set(stems, eq_points, fit, delta, rng):
-    """Step responses grouped by (low field, high field, half period)."""
     tau0_pair = eq_points[0]["tau_efold"]
     tau0 = tau0_pair[0]
     groups = {}
@@ -550,12 +567,13 @@ def step_set(stems, eq_points, fit, delta, rng):
     return out, curves
 
 
+# [min, max] of the finite values.
 def spread(values):
-    """[min, max] of the finite values."""
     v = [x for x in values if x is not None and np.isfinite(x)]
     return [float(min(v)), float(max(v))] if v else [np.nan, np.nan]
 
 
+# Ranges over bias points of the quantities that are quoted as ranges.
 def ranges(eq, tau_rows, ep, steps=()):
     """Extremes over bias points of the quantities quoted as ranges, so the ranges are on record.
 
@@ -587,6 +605,7 @@ def ranges(eq, tau_rows, ep, steps=()):
                  for v in st["tau_step_free_over_fixed"].values()])}
 
 
+# Time-step comparison at every field, each step against its own tau_c(0).
 def time_step_table(sets):
     """Per bias and time step (fs): the dt-sensitive numbers, the cosh-law ratio and step-to-step gaps.
 
@@ -610,6 +629,7 @@ def time_step_table(sets):
     return out
 
 
+# Same comparison with +B and -B pooled.
 def time_step_pooled(sets):
     """The time-step table with the seeds of +B and -B pooled (the two fields are mirror images).
 
@@ -637,20 +657,21 @@ def time_step_pooled(sets):
     return out
 
 
+# a / b for two [value, error] pairs, errors combined in quadrature.
 def ratio(a, b):
-    """a / b for two [value, error] pairs, errors combined in quadrature."""
     r = a[0] / b[0]
     return [float(r), float(r * np.hypot(a[1] / a[0], b[1] / b[0]))]
 
 
+# a - b for two [value, error] pairs, with its error and the gap in units of that error.
 def difference(a, b):
-    """a - b for two [value, error] pairs, with its error and the gap in units of that error."""
     d, e = a[0] - b[0], float(np.hypot(a[1], b[1]))
     return {"diff": float(d), "se": e, "sigma": float(d / e) if e > 0 else np.nan}
 
 
+# Device E: angle distribution, m_z spread, and read decorrelation against in-plane
+# field.
 def easy_plane_set(stems, rng):
-    """Device E: angle distribution, m_z spread, and read decorrelation against in-plane field."""
     groups = {}
     for stem in stems:
         groups.setdefault(meta_of(stem)["bx_mT"], []).append(stem)
@@ -696,16 +717,17 @@ def easy_plane_set(stems, rng):
     return out
 
 
+# Measured read statistics on the r0 grid with the telegraph predictions named in
+# labels.
 def stale_summary(rows, labels):
-    """Measured read statistics on the r0 grid with the telegraph predictions named in labels."""
     return [{"r0": r["r0"], "lag_ns": r["lag_ns"], "measured": r["measured"]["all"],
              "changed": [1 - r["measured"]["all"][0], r["measured"]["all"][1]],
              "same_up": r["measured"]["up"], "same_down": r["measured"]["down"],
              "acf": r["acf"]} | {lb: r[lb] for lb in labels if lb in r} for r in rows]
 
 
+# Headline numbers, each a [value, standard error] pair where an error exists.
 def summary(eq, fit, tau_rows, stale, tau0, checks, steps, stt, ep, steps50=()):
-    """Headline numbers, each a [value, standard error] pair where an error exists."""
     keep = ("I", "I_pooled", "minority_frac", "flips", "seeds", "well_minus_kT", "well_plus_kT",
             "tau_efold", "tau_dwell", "tau_tail", "tail_amp", "acf_0p1ns", "p_up_blocks",
             "dwell_sign_up_cv", "dwell_sign_up_short_excess", "neighbour_corr")
@@ -754,8 +776,8 @@ def summary(eq, fit, tau_rows, stale, tau0, checks, steps, stt, ep, steps50=()):
                            for b, v in ep.items()}}
 
 
+# Convert numpy scalars and arrays, and non-finite floats, for json.dump.
 def jsonable(x):
-    """Convert numpy scalars and arrays, and non-finite floats, for json.dump."""
     if isinstance(x, dict):
         return {str(k): jsonable(v) for k, v in x.items()}
     if isinstance(x, (list, tuple)):
@@ -769,11 +791,12 @@ def jsonable(x):
     return x
 
 
+# Write obj as indented json.
 def save_json(path, obj):
-    """Write obj as indented json."""
     path.write_text(json.dumps(jsonable(obj), indent=1))
 
 
+# Reduce every run directory into the records in OUTDIR (see the module docstring).
 def main():
     rundirs, outdir = [Path(a) for a in sys.argv[1:-1]], Path(sys.argv[-1])
     outdir.mkdir(parents=True, exist_ok=True)

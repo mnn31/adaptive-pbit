@@ -31,8 +31,9 @@ import mmstats as ms
 import numpy as np
 
 
+# Reads of every half period of square-wave runs by step direction: (table step,
+# segments).
 def step_segments(members, half_ns):
-    """Reads of every half period of square-wave runs by step direction: (table step, segments)."""
     segs = {"up": [], "down": []}
     for stem in members:
         meta, dt, _, m = an.load(stem)
@@ -45,6 +46,7 @@ def step_segments(members, half_ns):
     return dt, segs
 
 
+# Step records for the current reversals, built with analyze.step_record.
 def current_steps(step_stems, points, ref, rng):
     """Step responses to a current reversal between -J and +J, against the cosh law.
 
@@ -85,8 +87,8 @@ def current_steps(step_stems, points, ref, rng):
     return out, curves
 
 
+# Fraction of reads that differ from the one before, over the telegraph value, per r0.
 def read_change(rows):
-    """Fraction of reads that differ from the one before, over the telegraph value, per r0."""
     return {f"{r['r0']:g}": {"changed": [1 - r["measured"]["all"][0], r["measured"]["all"][1]],
                              "telegraph": 1 - r["telegraph_efold"]["all"],
                              "over_telegraph": (1 - r["measured"]["all"][0])
@@ -95,8 +97,9 @@ def read_change(rows):
             for r in rows}
 
 
+# Steps to +-72 mT: step time over tau_c(0), and over the cosh-law time at I = 4 x I(18
+# mT).
 def step_rows(recs, tau0_pair, i18):
-    """Steps to +-72 mT: step time over tau_c(0), and over the cosh-law time at I = 4 x I(18 mT)."""
     rows = []
     for st in recs:
         if abs(st["target_mT"]) != 72:
@@ -110,15 +113,16 @@ def step_rows(recs, tau0_pair, i18):
     return rows
 
 
+# The zero-bias numbers compared between meshes.
 def columns(pt):
-    """The zero-bias numbers compared between meshes."""
     keep = ("barrier_kT", "tau_efold", "tau_dwell", "mean_abs_m", "neighbour_corr", "acf_0p1ns",
             "seeds", "disk_us", "flips")
     return {f: pt[f] for f in keep} | {"peaks_mz": pt["seed_records"][0]["peaks"]}
 
 
+# The 1 nm runs per anisotropy constant, beside the 2 nm production values (see module
+# text).
 def mesh_check(stems, step_stems, eq, stale0, steps, rng):
-    """The 1 nm runs per anisotropy constant, beside the 2 nm production values (see module text)."""
     out = {"reference_2nm": columns(eq["0"]) | {
         "read_change": read_change(stale0), "I_18mT": eq["18"]["I"],
         "tau_18mT_over_cosh": an.cosh_ratio(eq["18"]["tau_efold"], eq["0"]["tau_efold"],
@@ -157,6 +161,7 @@ def mesh_check(stems, step_stems, eq, stale0, steps, rng):
     return out
 
 
+# Add spin_torque_step.json and mesh_check.json to RECORDS from the check runs.
 def main():
     rundirs, records = [Path(a) for a in sys.argv[1:-1]], Path(sys.argv[-1])
     rng = np.random.default_rng(11)
