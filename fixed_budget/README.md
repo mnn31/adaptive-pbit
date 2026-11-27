@@ -5,8 +5,8 @@ autocorrelated sMTJ randomness: what happens to classification accuracy when
 p-bit devices are sampled faster than their correlation time, and what
 recovers the loss. The adaptive-stopping study lives in the repository root.
 
-Manuscript (under review at IEEE Magnetics Letters):
-[`../papers/read-rate-limits-smtj-neurons.pdf`](../papers/read-rate-limits-smtj-neurons.pdf)
+Manuscript (under review at IEEE Magnetics Letters), preprint:
+https://doi.org/10.5281/zenodo.24447962
 
 ## Layout
 - `src/smtjnn/`: model (SBNN + STE), telegraph sMTJ source, protocols, training

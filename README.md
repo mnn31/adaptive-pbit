@@ -31,7 +31,7 @@ used by the manuscript; every figure is regenerated from them by
 **Manuscript.** The fixed-budget study in `fixed_budget/` is written up as
 "Read Rate Limits for Stochastic Magnetic Tunnel Junction Neurons in
 Probabilistic-Bit Classifiers" (sole author, under review at IEEE Magnetics
-Letters): [`papers/read-rate-limits-smtj-neurons.pdf`](papers/read-rate-limits-smtj-neurons.pdf).
+Letters). Preprint: https://doi.org/10.5281/zenodo.24447962
 
 ## Layout
 
